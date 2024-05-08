@@ -1,31 +1,47 @@
-use actix_web::{get, post, web, App, HttpResponse, HttpServer, Responder};
-use std::io;
+use crate::proto::greeter_server::{Greeter, GreeterServer};
+use crate::proto::{HelloRequest, HelloResponse};
+use tonic::{transport::Server, Request, Response};
 
-#[get("/")]
-async fn hello() -> impl Responder {
-    HttpResponse::Ok().body("Hello world!")
+/// A ZST that implements the `gRPC` service.
+///
+/// An instance of this type is passed to the tonic with the meaning:
+/// "I implement this `gRPC` service and can handle it, let me handle
+/// all requests that are related to that service"
+#[derive(Debug, Default)]
+pub struct TCPChat {}
+
+// NOTE: Here is where we teach the handler how to
+// handle each of the `RPC` requests it may receive.
+#[tonic::async_trait]
+impl Greeter for TCPChat {
+    async fn say_hello(
+        &self,
+        request: Request<HelloRequest>,
+    ) -> Result<Response<HelloResponse>, tonic::Status> {
+        dbg!(request);
+        Ok(Response::new(HelloResponse {
+            message: "hey!".into(),
+        }))
+    }
 }
 
-#[post("/echo")]
-async fn echo(req_body: String) -> impl Responder {
-    HttpResponse::Ok().body(req_body)
+/// The address of our `gRPC` service.
+const ADDR: &str = "[::1]:50051";
+
+#[tokio::main]
+async fn main() {
+    let addr = ADDR.parse().unwrap();
+    let greeter = TCPChat::default();
+    Server::builder()
+        .add_service(GreeterServer::new(greeter))
+        .serve(addr)
+        .await
+        .unwrap();
 }
 
-async fn manual_hello() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
-
-#[actix_web::main]
-async fn main() -> io::Result<()> {
-    let _ = color_eyre::install();
-
-    HttpServer::new(|| {
-        App::new()
-            .service(hello)
-            .service(echo)
-            .route("/hey", web::get().to(manual_hello))
-    })
-    .bind(("127.0.0.1", 8082))?
-    .run()
-    .await
+pub mod proto {
+    // HACK: The generated code produces some clippy warnings, which
+    // are by nature impossible to fix for me, so just silence them.
+    #![allow(clippy::pedantic, clippy::nursery)]
+    tonic::include_proto!("tcpchat");
 }

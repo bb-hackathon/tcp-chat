@@ -15,5 +15,10 @@ complexity = "deny"
 perf = "deny"
 
 [dependencies]
-actix-web = "4.5.1"
 color-eyre = "0.6.3"
+prost = "0.12.4"
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
+tonic = "0.11.0"
+
+[build-dependencies]
+tonic-build = "0.11"
