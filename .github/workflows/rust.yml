@@ -1,4 +1,4 @@
-name: Rust build
+name: Rust check
 
 on:
   push:
@@ -11,9 +11,9 @@ env:
   RUST_BACKTRACE: full
 
 jobs:
-  build:
+  check:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Build
+    - name: Check
       run: cargo check --verbose
