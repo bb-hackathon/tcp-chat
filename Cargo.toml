@@ -15,3 +15,5 @@ complexity = "deny"
 perf = "deny"
 
 [dependencies]
+actix-web = "4.5.1"
+color-eyre = "0.6.3"
