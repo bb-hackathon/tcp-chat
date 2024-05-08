@@ -1,10 +1,21 @@
-## Архитектура
+# Архитектура
 
 ![Архитектура](.github/assets/architecture.svg)
 
-## Локальная сборка и развертывание
+# Локальная сборка и развертывание сервера
 
-#### Сервер
+### С помощью Docker
+
+> [!TIP]
+> Это наиболее разумный способ развертывания. Остальные приведены для справки.
+
+```bash
+docker build -t tcp-chat   # Собрать только контейнер с сервером.
+docker compose up --detach # Поднять всю серверную часть. (БД, сервер, pgAdmin)
+docker compose down        # Shutdown серверной части.
+```
+
+### Без контейнеризации
 
 Установить `cargo` - официальную систему сборки Rust через [`rustup`](https://rustup.rs/).
 
@@ -16,5 +27,11 @@ cargo run --release   # Запуск сервера.
 cargo clippy          # Линтер.
 ```
 
-> [!TIP]
-> В системе необходим [`protoc`](https://grpc.io/docs/protoc-installation/)
+> [!IMPORTANT]
+> В системе необходим [`protoc`](https://grpc.io/docs/protoc-installation/)!
+
+### С помощью Nix
+
+```bash
+nix build . # Ага, вот так просто.
+```
