@@ -9,5 +9,5 @@
 
     # NOTE: If your application uses OpenSSL (making the build process fail), try:
     # nativeBuildInputs = with pkgs; [ pkg-config ];
-    # buildInputs = with pkgs; [ openssl ];
+    buildInputs = with pkgs; [ protobuf ];
 }
