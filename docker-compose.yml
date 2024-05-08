@@ -1,0 +1,42 @@
+version: "3.8"
+
+services:
+    postgresql:
+        image: postgres:16
+        hostname: postgres-db
+        restart: unless-stopped
+        environment:
+            POSTGRES_USER: ${DATABASE_USER}
+            POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+            POSTGRES_DB: ${DATABASE_NAME}
+        volumes:
+            - postgresql-data:/var/lib/postgresql/data
+        ports:
+            - "${POSTGRESQL_PORT}:5432"
+
+    pgadmin:
+        image: dpage/pgadmin4:latest
+        restart: unless-stopped
+        environment:
+            PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
+            PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+            PGADMIN_THEME: dark
+        ports:
+            - "${PGADMIN_PORT}:80"
+        depends_on:
+            - postgresql
+        volumes:
+            - pgadmin-data:/var/lib/pgadmin
+
+    server:
+        build: .
+        environment:
+            DATABASE_URL: ${DATABASE_URL}
+        ports:
+            - "${SERVER_RPC_PORT}:${SERVER_RPC_PORT}"
+        depends_on:
+            - postgresql
+
+volumes:
+    postgresql-data:
+    pgadmin-data:
