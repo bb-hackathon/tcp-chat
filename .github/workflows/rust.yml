@@ -9,6 +9,9 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: full
+  SERVER_RPC_PORT: 9001
+  POSTGRESQL_PORT: 9002
+  PGADMIN_PORT: 9003
 
 jobs:
   check:
