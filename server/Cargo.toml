@@ -1,0 +1,29 @@
+[package]
+name = "tcp-chat"
+version = "0.1.0"
+edition = "2021"
+authors = ["mxxntype <59417007+mxxntype@users.noreply.github.com>"]
+
+[dependencies]
+color-eyre = "0.6.3"
+const_format = "0.2.32"
+prost = "0.12.4"
+tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
+tonic = "0.11.0"
+
+[build-dependencies]
+tonic-build = "0.11"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+enum_glob_use = { level = "deny", priority = 1 }
+pedantic = "deny"
+nursery = "deny"
+complexity = "deny"
+perf = "deny"
+
+# `cargo-machete` reports this as unused, but it's absolutely used by `tonic` :)
+[package.metadata.cargo-machete]
+ignored = ["prost"]
