@@ -16,6 +16,7 @@ perf = "deny"
 
 [dependencies]
 color-eyre = "0.6.3"
+const_format = "0.2.32"
 prost = "0.12.4"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 tonic = "0.11.0"

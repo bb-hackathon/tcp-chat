@@ -1,5 +1,6 @@
 use crate::proto::greeter_server::{Greeter, GreeterServer};
 use crate::proto::{HelloRequest, HelloResponse};
+use const_format::formatcp;
 use tonic::{transport::Server, Request, Response};
 
 /// A ZST that implements the `gRPC` service.
@@ -26,11 +27,13 @@ impl Greeter for TCPChat {
 }
 
 /// The address of our `gRPC` service.
-const ADDR: &str = "[::1]:50051";
+const ADDR: &str = formatcp!("0.0.0.0:{}", env!("SERVER_RPC_PORT"));
 
 #[tokio::main]
 async fn main() {
+    let _ = color_eyre::install();
     let addr = ADDR.parse().unwrap();
+    println!("gRPC running on {addr}");
     let greeter = TCPChat::default();
     Server::builder()
         .add_service(GreeterServer::new(greeter))
