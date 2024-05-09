@@ -1,5 +1,6 @@
 syntax = "proto3";
 package tcpchat;
+option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
 
 message Nothing {}
 message UUID {
