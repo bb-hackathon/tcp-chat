@@ -1,45 +1,34 @@
-use crate::proto::greeter_server::{Greeter, GreeterServer};
-use crate::proto::{HelloRequest, HelloResponse};
+mod room_manager;
+
+use crate::proto::room_manager_server::RoomManagerServer;
+use crate::room_manager::RoomManager;
 use const_format::formatcp;
-use tonic::{transport::Server, Request, Response};
-
-/// A ZST that implements the `gRPC` service.
-///
-/// An instance of this type is passed to the tonic with the meaning:
-/// "I implement this `gRPC` service and can handle it, let me handle
-/// all requests that are related to that service"
-#[derive(Debug, Default)]
-pub struct TCPChat {}
-
-// NOTE: Here is where we teach the handler how to
-// handle each of the `RPC` requests it may receive.
-#[tonic::async_trait]
-impl Greeter for TCPChat {
-    async fn say_hello(
-        &self,
-        request: Request<HelloRequest>,
-    ) -> Result<Response<HelloResponse>, tonic::Status> {
-        dbg!(request);
-        Ok(Response::new(HelloResponse {
-            message: "hey!".into(),
-        }))
-    }
-}
+use tonic::transport::Server;
+use tracing_subscriber::fmt;
 
 /// The address of our `gRPC` service.
 const ADDR: &str = formatcp!("0.0.0.0:{}", env!("SERVER_RPC_PORT"));
 
 #[tokio::main]
 async fn main() {
-    let _ = color_eyre::install();
+    setup();
+
     let addr = ADDR.parse().unwrap();
-    println!("gRPC running on {addr}");
-    let greeter = TCPChat::default();
+    let room_manager = RoomManagerServer::new(RoomManager::default());
+
+    tracing::info!(message = "Starting gRPC server", ?addr);
     Server::builder()
-        .add_service(GreeterServer::new(greeter))
+        .trace_fn(|_| tracing::info_span!("tcpchat_server"))
+        .add_service(room_manager)
         .serve(addr)
         .await
         .unwrap();
+}
+
+fn setup() {
+    let color_eyre = color_eyre::install().is_ok();
+    fmt::Subscriber::builder().without_time().pretty().init();
+    tracing::debug!(message = "Tracing setup hook finished", %color_eyre);
 }
 
 pub mod proto {
