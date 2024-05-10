@@ -17,7 +17,7 @@ RUN \
     curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip \
     && unzip protoc-25.1-linux-x86_64.zip -d $HOME/.local \
     && export PATH="$PATH:$HOME/.local/bin" \
-    && cargo build --release \
+    && SERVER_RPC_PORT=9001 cargo build --release \
     && mv ./target/release/tcp-chat ./app
 
 

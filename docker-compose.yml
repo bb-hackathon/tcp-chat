@@ -29,7 +29,9 @@ services:
             - pgadmin-data:/var/lib/pgadmin
 
     server:
-        build: .
+        build:
+            context: .
+            dockerfile: Dockerfile
         environment:
             DATABASE_URL: ${DATABASE_URL}
         ports:
