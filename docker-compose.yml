@@ -4,7 +4,7 @@ services:
     postgresql:
         image: postgres:16
         hostname: postgres-db
-        restart: unless-stopped
+        restart: on-failure
         environment:
             POSTGRES_USER: ${DATABASE_USER}
             POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
@@ -16,7 +16,7 @@ services:
 
     pgadmin:
         image: dpage/pgadmin4:latest
-        restart: unless-stopped
+        restart: on-failure
         environment:
             PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
             PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
@@ -32,8 +32,9 @@ services:
         build:
             context: .
             dockerfile: Dockerfile
-        environment:
-            DATABASE_URL: ${DATABASE_URL}
+        restart: on-failure
+        env_file:
+            - .envrc
         ports:
             - "${SERVER_RPC_PORT}:${SERVER_RPC_PORT}"
         depends_on:

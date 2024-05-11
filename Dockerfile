@@ -14,11 +14,12 @@ RUN cargo chef cook --release --recipe-path recipe.json # WARN: Caching layer!
 COPY . .
 RUN \
     # HACK: The bloody protoc wouldn't fucking install normally, so just curl it from Github releases.
-    curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip \
+    bash -c "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v25.1/protoc-25.1-linux-x86_64.zip \
     && unzip protoc-25.1-linux-x86_64.zip -d $HOME/.local \
     && export PATH="$PATH:$HOME/.local/bin" \
-    && SERVER_RPC_PORT=9001 cargo build --release \
-    && mv ./target/release/tcp-chat ./app
+    && source .envrc \
+    && cargo build --release \
+    && mv ./target/release/tcp-chat ./app"
 
 
 

@@ -10,9 +10,9 @@
 > Это наиболее разумный способ развертывания. Остальные приведены для справки.
 
 ```bash
-docker build -t tcp-chat   # Собрать только контейнер с сервером.
-docker compose up --detach # Поднять всю серверную часть. (БД, сервер, pgAdmin)
-docker compose down        # Shutdown серверной части.
+docker build -t tcp-chat                      # Собрать только контейнер с сервером.
+docker compose up --detach --build tcp-server # Поднять всю серверную часть. (БД, сервер, pgAdmin)
+docker compose down                           # Shutdown серверной части.
 ```
 
 ### Без контейнеризации
