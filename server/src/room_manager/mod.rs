@@ -46,11 +46,15 @@ impl Manager for RoomManager {
         }
     }
 
-    #[instrument(skip(self))]
+    #[instrument(skip(self, _request))]
     async fn get_room_count(&self, _request: Request<()>) -> RPCResponse<RoomCount> {
-        Ok(Response::new(RoomCount {
-            count: self.rooms.lock().await.len() as u32,
-        }))
+        let count = self.rooms.lock().await.len();
+        let count: u32 = count.try_into().map_err(|_| {
+            tracing::error!(message = "Couldn't fit room count into response", ?count);
+            tonic::Status::internal("Room count does not fit into uint32")
+        })?;
+        tracing::info!(message = "Responding to GetRoomCount", ?count);
+        Ok(Response::new(RoomCount { count }))
     }
 
     #[allow(unused_variables)]
