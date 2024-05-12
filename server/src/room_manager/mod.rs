@@ -1,4 +1,5 @@
-use crate::proto::{room_manager_server::RoomManager as Manager, Message, Nothing, Room, Uuid};
+use crate::proto::room_manager_server::RoomManager as Manager;
+use crate::proto::{Message, Room, RoomCount, Uuid};
 use color_eyre::eyre::Result;
 use std::pin::Pin;
 use tokio::sync::Mutex;
@@ -28,7 +29,7 @@ impl Manager for RoomManager {
     }
 
     #[instrument(skip(self))]
-    async fn delete(&self, uuid: Request<Uuid>) -> RPCResponse<Nothing> {
+    async fn delete(&self, uuid: Request<Uuid>) -> RPCResponse<()> {
         let uuid = uuid.into_inner();
         let mut rooms = self.rooms.lock().await;
         if let Some(index) = rooms
@@ -38,28 +39,35 @@ impl Manager for RoomManager {
             rooms.swap_remove(index);
             drop(rooms);
             tracing::info!(message = "Deleting room", ?uuid);
-            Ok(Response::new(Nothing {}))
+            Ok(Response::new(()))
         } else {
             tracing::warn!(message = "No such room", ?uuid);
             Err(tonic::Status::not_found(uuid.uuid))
         }
     }
 
+    #[instrument(skip(self))]
+    async fn get_room_count(&self, _request: Request<()>) -> RPCResponse<RoomCount> {
+        Ok(Response::new(RoomCount {
+            count: self.rooms.lock().await.len() as u32,
+        }))
+    }
+
     #[allow(unused_variables)]
     #[instrument]
-    async fn add_user(&self, uuid: Request<Uuid>) -> RPCResponse<Nothing> {
+    async fn add_user(&self, uuid: Request<Uuid>) -> RPCResponse<()> {
         todo!("Handle user addition")
     }
 
     #[allow(unused_variables)]
     #[instrument]
-    async fn kick_user(&self, uuid: Request<Uuid>) -> RPCResponse<Nothing> {
+    async fn kick_user(&self, uuid: Request<Uuid>) -> RPCResponse<()> {
         todo!("Handle user kickouts")
     }
 
     #[allow(unused_variables)]
     #[instrument]
-    async fn send(&self, message: Request<Streaming<Message>>) -> RPCResponse<Nothing> {
+    async fn send(&self, message: Request<Streaming<Message>>) -> RPCResponse<()> {
         todo!("Handle message sending")
     }
 

@@ -1,7 +1,7 @@
 syntax = "proto3";
 package tcpchat;
+import "google/protobuf/empty.proto";
 
-message Nothing {}
 message UUID {
     string uuid = 1;
 }
@@ -12,7 +12,6 @@ message User {
 }
 
 message Message {
-    // UUID uuid = 1;
     string text = 1;
     User sender = 2;
 }
@@ -22,13 +21,18 @@ message Room {
     repeated User users = 2;
 }
 
+message RoomCount {
+    uint32 count = 1;
+}
+
 service RoomManager {
     rpc Create   (Room) returns (UUID);
-    rpc Delete   (UUID) returns (Nothing);
+    rpc Delete   (UUID) returns (google.protobuf.Empty);
+    rpc GetRoomCount (google.protobuf.Empty) returns (RoomCount);
 
-    rpc AddUser  (UUID) returns (Nothing);
-    rpc KickUser (UUID) returns (Nothing);
+    rpc AddUser  (UUID) returns (google.protobuf.Empty);
+    rpc KickUser (UUID) returns (google.protobuf.Empty);
 
-    rpc Send(stream Message) returns (Nothing);
+    rpc Send(stream Message) returns (google.protobuf.Empty);
     rpc Receive(UUID) returns (stream Message);
 }
