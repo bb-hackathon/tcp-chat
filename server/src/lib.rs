@@ -1,4 +1,5 @@
 pub mod room_manager;
+mod uuid_conversion;
 
 use crate::proto::room_manager_server::RoomManagerServer;
 use crate::room_manager::RoomManager;
@@ -18,6 +19,7 @@ impl TCPChat {
         tracing::debug!(message = "Tracing setup hook finished", %color_eyre);
     }
 
+    #[allow(clippy::missing_panics_doc)]
     pub async fn run(&self) {
         let addr = Self::ADDR.parse().unwrap();
         let room_manager = RoomManagerServer::new(RoomManager::default());

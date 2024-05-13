@@ -1,83 +1,88 @@
+#![allow(clippy::single_match_else)]
+#![allow(clippy::significant_drop_in_scrutinee)]
+
+use crate::proto::result::Type;
 use crate::proto::room_manager_server::RoomManager as Manager;
-use crate::proto::{Message, Room, RoomCount, Uuid};
+use crate::proto::Result as ProtobufResult;
+use crate::proto::Uuid as ProtobufUuid;
+use crate::proto::{Room, RoomCreationRequest, RoomDeletionRequest};
 use color_eyre::eyre::Result;
-use std::pin::Pin;
+use std::sync::Arc;
 use tokio::sync::Mutex;
-use tokio_stream::Stream;
-use tonic::{Request, Response, Streaming};
+use tokio_stream::wrappers::ReceiverStream;
+use tonic::{Request, Response, Status};
 use tracing::instrument;
+use uuid::Uuid;
 
 #[derive(Debug, Default)]
 pub struct RoomManager {
-    rooms: Mutex<Vec<Room>>,
+    rooms: Arc<Mutex<Vec<Room>>>,
 }
 
-type RPCResponse<T> = Result<Response<T>, tonic::Status>;
-type MessageStream = Pin<Box<dyn Stream<Item = Result<Message, tonic::Status>> + Send>>;
+type RPCResponse<T> = Result<Response<T>, Status>;
 
 #[tonic::async_trait]
 impl Manager for RoomManager {
-    type ReceiveStream = MessageStream;
-
     #[instrument(skip(self))]
-    async fn create(&self, room: Request<Room>) -> RPCResponse<Uuid> {
-        let room = room.into_inner();
-        let uuid = room.uuid.clone().unwrap_or_default().uuid;
-        tracing::info!(message = "Creating room", ?uuid);
-        self.rooms.lock().await.push(room);
-        Ok(Response::new(Uuid { uuid }))
+    async fn create_room(
+        &self,
+        request: Request<RoomCreationRequest>,
+    ) -> RPCResponse<ProtobufUuid> {
+        let room = request.into_inner();
+        let visible_name = room.visible_name.clone();
+        let uuid = Uuid::new_v4();
+
+        tracing::info!(message = "Creating room", ?visible_name);
+        self.rooms.lock().await.push(Room {
+            uuid: Some(uuid.into()),
+            visible_name,
+            user_uuids: room.user_uuids,
+        });
+
+        Ok(Response::new(ProtobufUuid {
+            uuid: uuid.to_string(),
+        }))
     }
 
     #[instrument(skip(self))]
-    async fn delete(&self, uuid: Request<Uuid>) -> RPCResponse<()> {
-        let uuid = uuid.into_inner();
+    async fn delete_room(
+        &self,
+        request: Request<RoomDeletionRequest>,
+    ) -> RPCResponse<ProtobufResult> {
+        let proto_uuid = request.into_inner().room_uuid.unwrap_or_default();
         let mut rooms = self.rooms.lock().await;
-        if let Some(index) = rooms
+        match rooms
             .iter()
-            .position(|room| room.uuid.as_ref() == Some(&uuid))
+            .position(|room| room.uuid.as_ref() == Some(&proto_uuid))
         {
-            rooms.swap_remove(index);
-            drop(rooms);
-            tracing::info!(message = "Deleting room", ?uuid);
-            Ok(Response::new(()))
-        } else {
-            tracing::warn!(message = "No such room", ?uuid);
-            Err(tonic::Status::not_found(uuid.uuid))
+            Some(index) => {
+                rooms.swap_remove(index);
+                drop(rooms);
+                tracing::info!(message = "Deleting room", ?proto_uuid);
+                Ok(Response::new(ProtobufResult {
+                    r#type: Some(Type::Ok(proto_uuid.uuid)),
+                }))
+            }
+            None => {
+                tracing::warn!(message = "No such room", ?proto_uuid);
+                Err(Status::not_found(proto_uuid.uuid))
+            }
         }
     }
 
+    type GetRoomsStream = ReceiverStream<Result<Room, Status>>;
+
     #[instrument(skip(self, _request))]
-    async fn get_room_count(&self, _request: Request<()>) -> RPCResponse<RoomCount> {
-        let count = self.rooms.lock().await.len();
-        let count: u32 = count.try_into().map_err(|_| {
-            tracing::error!(message = "Couldn't fit room count into response", ?count);
-            tonic::Status::internal("Room count does not fit into uint32")
-        })?;
-        tracing::info!(message = "Responding to GetRoomCount", ?count);
-        Ok(Response::new(RoomCount { count }))
-    }
+    async fn get_rooms(&self, _request: Request<()>) -> RPCResponse<Self::GetRoomsStream> {
+        let (tx, rx) = tokio::sync::mpsc::channel(128);
+        let rooms = self.rooms.clone();
 
-    #[allow(unused_variables)]
-    #[instrument]
-    async fn add_user(&self, uuid: Request<Uuid>) -> RPCResponse<()> {
-        todo!("Handle user addition")
-    }
+        tokio::spawn(async move {
+            for room in rooms.lock().await.iter() {
+                tx.send(Ok(room.clone())).await.unwrap();
+            }
+        });
 
-    #[allow(unused_variables)]
-    #[instrument]
-    async fn kick_user(&self, uuid: Request<Uuid>) -> RPCResponse<()> {
-        todo!("Handle user kickouts")
-    }
-
-    #[allow(unused_variables)]
-    #[instrument]
-    async fn send(&self, message: Request<Streaming<Message>>) -> RPCResponse<()> {
-        todo!("Handle message sending")
-    }
-
-    #[allow(unused_variables)]
-    #[instrument]
-    async fn receive(&self, uuid: Request<Uuid>) -> RPCResponse<MessageStream> {
-        todo!("Handle message receiving")
+        Ok(Response::new(ReceiverStream::new(rx)))
     }
 }

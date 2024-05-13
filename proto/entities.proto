@@ -1,0 +1,20 @@
+syntax = "proto3";
+package tcpchat;
+option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
+
+message Result {
+    oneof type {
+        string ok = 1;
+        string err = 2;
+    }
+}
+
+message UUID {
+    string uuid = 1;
+}
+
+message Room {
+    UUID          uuid         = 1; // Unique identifier of the room.
+    string        visible_name = 2; // User-facing name of the room.
+    repeated UUID user_uuids   = 3; // UUIDs of users in the room.
+}

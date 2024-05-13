@@ -1,0 +1,21 @@
+syntax = "proto3";
+package tcpchat;
+option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
+
+import "entities.proto";
+import "google/protobuf/empty.proto";
+
+service RoomManager {
+    rpc CreateRoom   (RoomCreationRequest)   returns (UUID);
+    rpc DeleteRoom   (RoomDeletionRequest)   returns (Result);
+    rpc GetRooms     (google.protobuf.Empty) returns (stream Room);
+}
+
+message RoomCreationRequest {
+    string visible_name = 1;
+    repeated UUID user_uuids = 2;
+}
+
+message RoomDeletionRequest {
+    UUID room_uuid = 1;
+}
