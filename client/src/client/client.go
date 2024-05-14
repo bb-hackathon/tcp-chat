@@ -1,41 +1,30 @@
 package main
 
 import (
-	"context"
+	pb "bb-hackathon/tcp-chat.git/proto"
+	form "bb-hackathon/tcp-chat.git/src/form"
 	"log"
-
-	pb "bb-hackathon/tcp-chat.git/proto" // Замените на путь к сгенерированному пакету
+	"net/http"
 
 	"google.golang.org/grpc"
 )
 
+var client pb.RoomManagerClient
+
 func main() {
+	// Инициализируем gRPC-клиент
 	conn, err := grpc.Dial("localhost:50051", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
 	defer conn.Close()
 
-	client := pb.NewRoomManagerClient(conn)
+	client = pb.NewRoomManagerClient(conn)
 
-	ctx := context.Background()
-	room := &pb.Room{
-		Uuid: &pb.UUID{Uuid: "some-id"},
-		Users: []*pb.User{
-			{
-				Uuid:     &pb.UUID{Uuid: "user-uuid-1"},
-				Nickname: "nickname1",
-			},
-			{
-				Uuid:     &pb.UUID{Uuid: "user-uuid-2"},
-				Nickname: "nickname2",
-			},
-		},
-	}
+	// Настройка обработчиков HTTP
+	http.HandleFunc("/", form.IndexHandler)
+	http.HandleFunc("/create", form.CreateHandler(client))
 
-	response, err := client.Create(ctx, room)
-	if err != nil {
-		log.Fatalf("could not create room: %v", err)
-	}
-	log.Printf("Created room with UUID: %s", response.Uuid) // Исправлено здесь
+	log.Println("Сервер запущен на http://localhost:8081")
+	log.Fatal(http.ListenAndServe(":8081", nil))
 }
