@@ -46,3 +46,7 @@ service Registry {
     // Get notified of any other server events.
     // rpc StreamServer (UUID) returns (stream ServerEvent);
 }
+
+service AuthenticationTester {
+    rpc TestAuthentication (google.protobuf.Empty) returns (google.protobuf.Empty);
+}

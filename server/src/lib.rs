@@ -1,9 +1,16 @@
+mod auth;
 mod entities;
 pub mod registry;
-mod token;
-mod uuid;
+pub mod token;
+pub mod uuid;
 
-use crate::{proto::registry_server::RegistryServer, registry::Registry};
+use crate::{
+    auth::{AuthenticationTester, Authenticator},
+    proto::{
+        authentication_tester_server::AuthenticationTesterServer, registry_server::RegistryServer,
+    },
+    registry::Registry,
+};
 use const_format::formatcp;
 use tonic::transport::Server;
 use tracing_subscriber::fmt;
@@ -23,10 +30,20 @@ impl TCPChat {
     #[allow(clippy::missing_panics_doc)]
     pub async fn run(&self) {
         let addr = Self::ADDR.parse().unwrap();
+
+        let registry = Registry::default();
+        let auth_tester = AuthenticationTester::new();
+        let auth_tester_service = AuthenticationTesterServer::with_interceptor(
+            auth_tester,
+            Authenticator::new(registry.get_user_repo()),
+        );
+        let registry_service = RegistryServer::new(registry);
+
         tracing::info!(message = "Starting gRPC chat", ?addr);
         Server::builder()
             .trace_fn(|_| tracing::info_span!("tcp_chat"))
-            .add_service(RegistryServer::new(Registry::default()))
+            .add_service(registry_service)
+            .add_service(auth_tester_service)
             .serve(addr)
             .await
             .unwrap();

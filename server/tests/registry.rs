@@ -1,13 +1,9 @@
 #![allow(clippy::significant_drop_tightening)]
 
-use tcp_chat::proto::{registry_client::RegistryClient, UserCredentials};
-use tcp_chat::TCPChat;
+mod common;
 
-async fn start_test_server() {
-    TCPChat::preflight();
-    let chat = TCPChat::default();
-    chat.run().await;
-}
+use common::start_test_server;
+use tcp_chat::proto::{registry_client::RegistryClient, UserCredentials};
 
 #[tokio::test]
 async fn register() {

@@ -12,13 +12,10 @@ pub struct Registry {
     rng: Arc<Mutex<ChaCha20Rng>>,
 }
 
-impl Default for Registry {
-    fn default() -> Self {
-        let rng = ChaCha20Rng::seed_from_u64(OsRng.next_u64());
-        Self {
-            user_repo: Arc::new(Mutex::new(vec![])),
-            rng: Arc::new(Mutex::new(rng)),
-        }
+impl Registry {
+    #[must_use]
+    pub fn get_user_repo(&self) -> Arc<Mutex<Vec<User>>> {
+        Arc::clone(&self.user_repo)
     }
 }
 
@@ -33,9 +30,9 @@ impl proto::registry_server::Registry for Registry {
         let username = credentials.username;
         let password = credentials.password;
         let mut user_repo = self.user_repo.lock().await;
+        let duplicate_user = user_repo.iter().find(|user| user.username() == username);
 
-        let found_user = user_repo.iter().find(|u| u.username() == username);
-        match found_user {
+        match duplicate_user {
             // No duplicate usernames found, registering a new account.
             None => {
                 user_repo.push(User::new(
@@ -66,10 +63,11 @@ impl proto::registry_server::Registry for Registry {
         let username = credentials.username;
         let password = credentials.password;
         let user_repo = self.user_repo.lock().await;
-        let found_user = user_repo
+        let matching_user = user_repo
             .iter()
-            .find(|u| u.username() == username && u.password() == password);
-        match found_user {
+            .find(|user| user.username() == username && user.password() == password);
+
+        match matching_user {
             // A an account with matching credentials exist, returns its UUID and token.
             Some(user) => {
                 tracing::info!(message = "Authentication successful", ?username);
@@ -85,6 +83,16 @@ impl proto::registry_server::Registry for Registry {
                 tracing::warn!(message = msg, ?username);
                 Err(Status::unauthenticated(msg))
             }
+        }
+    }
+}
+
+impl Default for Registry {
+    fn default() -> Self {
+        let rng = ChaCha20Rng::seed_from_u64(OsRng.next_u64());
+        Self {
+            user_repo: Arc::new(Mutex::new(vec![])),
+            rng: Arc::new(Mutex::new(rng)),
         }
     }
 }
