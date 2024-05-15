@@ -1,0 +1,48 @@
+syntax = "proto3";
+package tcp_chat;
+option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
+
+import "entities.proto";
+import "requests.proto";
+import "events.proto";
+import "google/protobuf/empty.proto";
+
+service Registry {
+    // Attempt to register a new user with the provided credentials.
+    //
+    // If a user with such username already exists, produce an error.
+    rpc RegisterNewUser (UserCredentials) returns (google.protobuf.Empty);
+
+    // Attempt to log in as an existing user with the provided credentials.
+    //
+    // If a matching account is found, return an AuthPair for subscriptions.
+    // If no such user exists or the password is incorrect, return an error.
+    rpc LoginAsUser (UserCredentials) returns (AuthPair);
+
+    // Look up a someone's UUID by username.
+    // rpc LookupUserUUID (UserUUIDLookupRequest) returns (UUID);
+
+    // Create a new room with the provided name and members, returning its entity.
+    // rpc CreateRoom (RoomCreation) returns (Room);
+
+    // Wipe out an entire room by UUID.
+    // rpc DeleteRoom (UUID) returns (google.protobuf.Empty);
+
+    // Fetch all rooms that a user is in.
+    // rpc FetchRooms (UUID) returns (stream Room);
+
+    // Add a user (by UUID) to a room (by UUID).
+    // rpc AddUserToRoom (RoomMember) returns (google.protobuf.Empty);
+
+    // Remove a user (by UUID) from a room (by UUID).
+    // rpc KickUserFromRoom (RoomMember) returns (google.protobuf.Empty);
+
+    // Open a biderectional stream of event after logging in.
+    // rpc StreamRooms (stream ClientsideRoomEvent) returns (stream ServersideUserEvent);
+
+    // Open a bidirectional stream of events when inside of a chat room.
+    // rpc StreamMessages (stream ClientsideMessageEvent) returns (stream ServersideMessageEvent);
+    
+    // Get notified of any other server events.
+    // rpc StreamServer (UUID) returns (stream ServerEvent);
+}

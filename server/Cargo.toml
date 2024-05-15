@@ -8,6 +8,9 @@ authors = ["mxxntype <59417007+mxxntype@users.noreply.github.com>"]
 color-eyre = "0.6.3"
 const_format = "0.2.32"
 prost = "0.12.4"
+prost-types = "0.12.4"
+rand_chacha = "0.3.1"
+rand_core = "0.6.4"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1.15"
 tonic = "0.11.0"
@@ -22,6 +25,8 @@ tonic-build = "0.11"
 unsafe_code = "forbid"
 
 [lints.clippy]
+single_match_else = { level = "allow", priority = 1 }
+option_if_let_else = { level = "allow", priority = 1 }
 enum_glob_use = { level = "deny", priority = 1 }
 pedantic = "deny"
 nursery = "deny"

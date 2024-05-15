@@ -1,20 +1,72 @@
 syntax = "proto3";
-package tcpchat;
+package tcp_chat;
 option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
 
-message Result {
-    oneof type {
-        string ok = 1;
-        string err = 2;
-    }
-}
+import "google/protobuf/timestamp.proto";
 
+// A unique identifier of any entity.
+//
+// UUIDs should only be created or looked up by the server and sent
+// back in a response to a creation/lookup request made by a client.
 message UUID {
     string uuid = 1;
 }
 
-message Room {
-    UUID          uuid         = 1; // Unique identifier of the room.
-    string        visible_name = 2; // User-facing name of the room.
-    repeated UUID user_uuids   = 3; // UUIDs of users in the room.
+// An authentication token. WARN: Sensitive!
+//
+// Is used in par with a UUID (see above and below). The only way to acquire
+// the token is to get it back in a response from the LoginAsUser() RPC call.
+message AuthToken {
+    string token = 1;
 }
+
+// A UUID+token pair that's used for user authentication after logging in.
+//
+// UUIDs are *not* sensitive information (the client throws those around all the
+// time while fetching room members, receiving messages, etc.), but the only way
+// to acquire a token is to log in as a user (and get it back in the response). 
+//
+// The same pair (but not in form of a message) should be added to any requests
+// to the server as metadata attributes, those will be inspected by the server's
+// request interceptor and either allowed in or early-dropped.
+message AuthPair {
+    UUID user_uuid = 1;
+    AuthToken token = 2;
+}
+
+// A username+password pair that's used to authenticate with the server.
+//
+// TODO: Send the password hashed, not in plaintext.
+message UserCredentials {
+    string username = 1;
+    string password = 2;
+}
+
+// message Message {
+//     UUID uuid = 1;
+//     User sender = 2;
+//     UUID room_uuid = 3;
+//     google.protobuf.Timestamp timestamp = 4;
+//     string text = 5;
+// }
+
+// message User {
+//     UUID uuid = 1;
+//     string username = 2;
+// }
+
+// message Room {
+//     UUID          uuid         = 1; // Unique identifier of the room.
+//     string        visible_name = 2; // User-facing name of the room.
+//     repeated UUID user_uuids   = 3; // UUIDs of users in the room.
+// }
+
+// message RoomCreation {
+//     string name = 1;
+//     repeated UUID user_uuids = 2;
+// }
+
+// message RoomMember {
+//     UUID room_uuid = 1;
+//     UUID user_uuid = 2;
+// }

@@ -1,8 +1,9 @@
-pub mod room_manager;
-mod uuid_conversion;
+mod entities;
+pub mod registry;
+mod token;
+mod uuid;
 
-use crate::proto::room_manager_server::RoomManagerServer;
-use crate::room_manager::RoomManager;
+use crate::{proto::registry_server::RegistryServer, registry::Registry};
 use const_format::formatcp;
 use tonic::transport::Server;
 use tracing_subscriber::fmt;
@@ -22,11 +23,10 @@ impl TCPChat {
     #[allow(clippy::missing_panics_doc)]
     pub async fn run(&self) {
         let addr = Self::ADDR.parse().unwrap();
-        let room_manager = RoomManagerServer::new(RoomManager::default());
-        tracing::info!(message = "Starting gRPC server", ?addr);
+        tracing::info!(message = "Starting gRPC chat", ?addr);
         Server::builder()
-            .trace_fn(|_| tracing::info_span!("tcpchat_server"))
-            .add_service(room_manager)
+            .trace_fn(|_| tracing::info_span!("tcp_chat"))
+            .add_service(RegistryServer::new(Registry::default()))
             .serve(addr)
             .await
             .unwrap();
@@ -37,5 +37,5 @@ pub mod proto {
     // HACK: The generated code produces some clippy warnings, which
     // are by nature impossible to fix for me, so just silence them.
     #![allow(clippy::pedantic, clippy::nursery)]
-    tonic::include_proto!("tcpchat");
+    tonic::include_proto!("tcp_chat");
 }
