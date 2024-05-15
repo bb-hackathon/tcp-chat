@@ -1,7 +1,7 @@
 use crate::proto;
 use rand_chacha::ChaChaRng;
 use rand_core::RngCore;
-use std::fmt;
+use std::{fmt, num::ParseIntError, str::FromStr};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[allow(clippy::module_name_repetitions)]
@@ -33,12 +33,19 @@ impl From<AuthToken> for proto::AuthToken {
     }
 }
 
+impl FromStr for AuthToken {
+    type Err = ParseIntError;
+    fn from_str(str: &str) -> Result<Self, Self::Err> {
+        Ok(Self {
+            token: u128::from_str_radix(str, 16)?,
+        })
+    }
+}
+
 impl TryFrom<proto::AuthToken> for AuthToken {
     type Error = std::num::ParseIntError;
 
     fn try_from(proto_token: proto::AuthToken) -> Result<Self, Self::Error> {
-        Ok(Self {
-            token: u128::from_str_radix(&proto_token.token, 16)?,
-        })
+        Self::from_str(&proto_token.token)
     }
 }

@@ -20,18 +20,22 @@ impl User {
         }
     }
 
+    #[must_use]
     pub fn username(&self) -> &str {
         &self.username
     }
 
+    #[must_use]
     pub fn password(&self) -> &str {
         &self.password
     }
 
+    #[must_use]
     pub const fn uuid(&self) -> &Uuid {
         &self.uuid
     }
 
+    #[must_use]
     pub const fn auth_token(&self) -> &AuthToken {
         &self.auth_token
     }

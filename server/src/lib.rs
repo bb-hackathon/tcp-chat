@@ -1,16 +1,13 @@
-mod auth;
-mod entities;
+pub mod auth;
+pub mod entities;
 pub mod registry;
 pub mod token;
 pub mod uuid;
 
-use crate::{
-    auth::{AuthenticationTester, Authenticator},
-    proto::{
-        authentication_tester_server::AuthenticationTesterServer, registry_server::RegistryServer,
-    },
-    registry::Registry,
-};
+use crate::auth::{AuthenticationTester, Authenticator};
+use crate::proto::authentication_tester_server::AuthenticationTesterServer;
+use crate::proto::registry_server::RegistryServer;
+use crate::registry::Registry;
 use const_format::formatcp;
 use tonic::transport::Server;
 use tracing_subscriber::fmt;
