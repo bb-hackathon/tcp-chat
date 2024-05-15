@@ -45,7 +45,7 @@ impl proto::registry_server::Registry for Registry {
                 Ok(Response::new(()))
             }
 
-            // A user with a matching username was found, refure to register.
+            // A user with a matching username was found, refuse to register.
             Some(_) => {
                 tracing::warn!(message = "Refusing to register duplicate user", ?username);
                 Err(Status::already_exists("Such user already exists"))
