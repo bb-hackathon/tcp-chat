@@ -23,7 +23,6 @@ type RPCStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send + 'stati
 #[tonic::async_trait]
 impl proto::chat_server::Chat for Chat {
     #[tracing::instrument(skip(self))]
-    #[allow(clippy::significant_drop_tightening)]
     async fn lookup_user(
         &self,
         _request: Request<UserUuidLookupRequest>,

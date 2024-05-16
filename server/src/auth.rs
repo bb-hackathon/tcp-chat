@@ -81,7 +81,6 @@ impl Authenticator {
 }
 
 impl Interceptor for Authenticator {
-    #[allow(clippy::significant_drop_tightening)]
     fn call(&mut self, _request: Request<()>) -> Result<Request<()>, Status> {
         // let auth_pair = request.get_auth_pair().map_err(|_| unauthenticated())?;
 

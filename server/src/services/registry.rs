@@ -71,7 +71,6 @@ impl proto::registry_server::Registry for Registry {
     }
 
     #[tracing::instrument(skip(self, request))]
-    #[allow(clippy::significant_drop_tightening)]
     async fn login_as_user(
         &self,
         request: Request<UserCredentials>,
