@@ -42,4 +42,9 @@ diesel::joinable!(messages -> users (sender_uuid));
 diesel::joinable!(rooms_users -> rooms (room_uuid));
 diesel::joinable!(rooms_users -> users (user_uuid));
 
-diesel::allow_tables_to_appear_in_same_query!(messages, rooms, rooms_users, users,);
+diesel::allow_tables_to_appear_in_same_query!(
+    messages,
+    rooms,
+    rooms_users,
+    users,
+);

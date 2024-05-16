@@ -11,7 +11,7 @@ use crate::proto::authentication_tester_server::AuthenticationTesterServer;
 use crate::proto::chat_server::ChatServer;
 use crate::proto::registry_server::RegistryServer;
 use crate::services::{auth_tester::AuthenticationTester, chat::Chat, registry::Registry};
-use const_format::formatcp;
+use std::env;
 use tonic::transport::Server;
 use tracing_subscriber::fmt;
 
@@ -19,8 +19,6 @@ use tracing_subscriber::fmt;
 pub struct TCPChat {}
 
 impl TCPChat {
-    const ADDR: &'static str = formatcp!("0.0.0.0:{}", env!("SERVER_RPC_PORT"));
-
     pub fn preflight() {
         let color_eyre = color_eyre::install().is_ok();
         fmt::Subscriber::builder()
@@ -33,9 +31,10 @@ impl TCPChat {
 
     #[allow(clippy::missing_panics_doc)]
     pub async fn run(&self) {
-        let addr = Self::ADDR
+        let port = env::var("SERVER_PORT").expect("$SERVER_PORT should be set");
+        let addr = format!("0.0.0.0:{port}")
             .parse()
-            .expect("Server listen address can't be invalid");
+            .expect("Invalid gRPC listen address");
 
         match create_connection_pool() {
             // The database is not running or something is wrong with it.

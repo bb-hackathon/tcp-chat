@@ -1,3 +1,8 @@
+mod options;
+
+use crate::options::Options;
+use clap::Parser;
+use options::Action;
 use promkit::preset::{password::Password, readline::Readline};
 use std::panic;
 use tcp_chat::proto::registry_client::RegistryClient;
@@ -11,6 +16,8 @@ async fn main() {
         crossterm::terminal::disable_raw_mode().unwrap();
         eyre_hook(panic_info);
     }));
+
+    let options = Options::parse();
 
     let mut registry = RegistryClient::connect("http://localhost:9001")
         .await
@@ -35,22 +42,23 @@ async fn main() {
         .prompt()
         .unwrap();
     let password = password_prompt.run().unwrap();
+    let credentials = UserCredentials { username, password };
 
-    let credentials = UserCredentials {
-        username: username.clone(),
-        password,
-    };
-    // registry
-    //     .register_new_user(credentials.clone())
-    //     .await
-    //     .unwrap();
-
-    crossterm::terminal::disable_raw_mode().unwrap();
-
-    let auth_pair = registry
-        .login_as_user(credentials)
-        .await
-        .unwrap()
-        .into_inner();
-    println!("{auth_pair:?}");
+    match options.action() {
+        Action::Register => {
+            registry
+                .register_new_user(credentials.clone())
+                .await
+                .unwrap();
+        }
+        Action::Login => {
+            let auth_pair = registry
+                .login_as_user(credentials)
+                .await
+                .unwrap()
+                .into_inner();
+            crossterm::terminal::disable_raw_mode().unwrap();
+            println!("{auth_pair:?}");
+        }
+    }
 }

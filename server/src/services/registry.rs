@@ -96,7 +96,7 @@ impl proto::registry_server::Registry for Registry {
         match candidate_user {
             // A an account with matching credentials exist, returns its UUID and token.
             Some(user) => {
-                tracing::debug!(message = "Login successful", ?username);
+                tracing::debug!(message = "Login successful", username = ?credentials.username);
                 Ok(Response::new(user.auth_pair()))
             }
 

@@ -1,6 +1,6 @@
 FROM rust:latest AS chef 
 
-RUN cargo install cargo-chef 
+RUN cargo install cargo-chef
 WORKDIR app
 
 FROM chef AS planner
@@ -18,13 +18,14 @@ RUN \
     && unzip protoc-25.1-linux-x86_64.zip -d $HOME/.local \
     && export PATH="$PATH:$HOME/.local/bin" \
     && source .envrc \
-    && cargo build --release \
+    && cargo build --release --bin server \
     && mv ./target/release/server ./app"
 
 
 
 # We do not need the Rust toolchain to run the binary!
 FROM debian:bookworm-slim AS runtime
+RUN apt-get update && apt-get install libpq-dev --yes
 WORKDIR app
 COPY --from=builder /app/app /usr/local/bin/app
 ENTRYPOINT ["/usr/local/bin/app"]
