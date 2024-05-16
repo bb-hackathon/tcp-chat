@@ -4,7 +4,7 @@ services:
     postgresql:
         image: postgres:16
         hostname: postgres-db
-        restart: on-failure
+        restart: unless-stopped
         environment:
             POSTGRES_USER: ${DATABASE_USER}
             POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
@@ -15,8 +15,8 @@ services:
             - "${POSTGRESQL_PORT}:5432"
 
     pgadmin:
-        image: dpage/pgadmin4:latest
-        restart: on-failure
+        image: elestio/pgadmin:latest
+        restart: unless-stopped
         environment:
             PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL}
             PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
@@ -28,17 +28,17 @@ services:
         volumes:
             - pgadmin-data:/var/lib/pgadmin
 
-    server:
-        build:
-            context: .
-            dockerfile: server/Dockerfile
-        restart: on-failure
-        env_file:
-            - .envrc
-        ports:
-            - "${SERVER_RPC_PORT}:${SERVER_RPC_PORT}"
-        depends_on:
-            - postgresql
+    # server:
+    #     build:
+    #         context: .
+    #         dockerfile: server/Dockerfile
+    #     restart: unless-stopped
+    #     env_file:
+    #         - .envrc
+    #     ports:
+    #         - "${SERVER_RPC_PORT}:${SERVER_RPC_PORT}"
+    #     depends_on:
+    #         - postgresql
 
 volumes:
     postgresql-data:

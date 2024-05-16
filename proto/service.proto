@@ -27,6 +27,25 @@ service Registry {
     rpc LoginAsUser (UserCredentials) returns (AuthPair);
 }
 
+// A service that represents the functional model of the chat application.
+//
+// This service has an authenticating interceptor, meaning that in order to use
+// it in any way, a client must first interact with the Registry service to get
+// an AuthPair from it, and embed it in the request's metadata section.
+service Chat {
+    // Look up a user account by username.
+    rpc LookupUser (UserUUIDLookupRequest) returns (User);
+    
+    rpc SubscribeToRoom (UUID) returns (stream ServersideRoomEvent);
+    rpc SendMessage (ClientsideMessage) returns (google.protobuf.Empty);
+
+    rpc SubscribeToUser (google.protobuf.Empty) returns (stream ServersideUserEvent);
+    rpc CreateRoom (ClientsideRoom) returns (google.protobuf.Empty);
+    // rpc DeleteRoom (UUID) returns (google.protobuf.Empty);
+
+    // rpc MessageEvents (stream ClientsideMessageEvent) returns (stream ServersideMessageEvent);
+}
+
 // A stub service that authenticates all requests it receives.
 //
 // In order to successfully call the TestAuthentication RPC, the request has to
@@ -37,35 +56,6 @@ service Registry {
 // match any of the users' AuthPair, the request is dropped immediately and
 // a Status::unauthenticated is returned to the caller.
 service AuthenticationTester {
+    // RPC with no payload to test the auth interception.
     rpc TestAuthentication (google.protobuf.Empty) returns (google.protobuf.Empty);
 }
-
-// TODO
-// service ... {
-//     // Look up a someone's UUID by username.
-//     rpc LookupUserUUID (UserUUIDLookupRequest) returns (UUID);
-
-//     // Create a new room with the provided name and members, returning its entity.
-//     rpc CreateRoom (RoomCreation) returns (Room);
-
-//     // Wipe out an entire room by UUID.
-//     rpc DeleteRoom (UUID) returns (google.protobuf.Empty);
-
-//     // Fetch all rooms that a user is in.
-//     rpc FetchRooms (UUID) returns (stream Room);
-
-//     // Add a user (by UUID) to a room (by UUID).
-//     rpc AddUserToRoom (RoomMember) returns (google.protobuf.Empty);
-
-//     // Remove a user (by UUID) from a room (by UUID).
-//     rpc KickUserFromRoom (RoomMember) returns (google.protobuf.Empty);
-
-//     // Open a biderectional stream of event after logging in.
-//     rpc StreamRooms (stream ClientsideRoomEvent) returns (stream ServersideUserEvent);
-
-//     // Open a bidirectional stream of events when inside of a chat room.
-//     rpc StreamMessages (stream ClientsideMessageEvent) returns (stream ServersideMessageEvent);
-    
-//     // Get notified of any other server events.
-//     rpc StreamServer (UUID) returns (stream ServerEvent);
-// }

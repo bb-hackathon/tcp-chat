@@ -42,31 +42,43 @@ message UserCredentials {
     string password = 2;
 }
 
-// message Message {
-//     UUID uuid = 1;
-//     User sender = 2;
-//     UUID room_uuid = 3;
-//     google.protobuf.Timestamp timestamp = 4;
-//     string text = 5;
-// }
+// A user account entity that the client may request from the server.
+//
+// For example, when the client needs to list the members of the room or display
+// the profile of the user you're about to send a message to, it looks up a user
+// in the server's database by using the Chat::LookupUser
+message User {
+    UUID uuid = 1;
+    string username = 2;
+}
 
-// message User {
-//     UUID uuid = 1;
-//     string username = 2;
-// }
+// The entity that the client sends to the server whenever the user sends a new
+// message. The UUID of the user is embeded in the requests metadata, so all we
+// need to know are the contents of the message and the UUID of the room that
+// this message belongs to.
+//
+// The server's job is to generate a UUID of the message and store it, along
+// with a timestamp and the UUID of the sender (see below).
+message ClientsideMessage {
+    UUID room_uuid = 1;
+    string text = 2;
+}
 
-// message Room {
-//     UUID          uuid         = 1; // Unique identifier of the room.
-//     string        visible_name = 2; // User-facing name of the room.
-//     repeated UUID user_uuids   = 3; // UUIDs of users in the room.
-// }
+message ServersideMessage {
+    UUID uuid = 1;
+    UUID sender_uuid = 2;
+    UUID room_uuid = 3;
+    string text = 4;
+    google.protobuf.Timestamp timestamp = 5;
+}
 
-// message RoomCreation {
-//     string name = 1;
-//     repeated UUID user_uuids = 2;
-// }
+message ClientsideRoom {
+    string name = 1;
+    repeated UUID members = 2;
+}
 
-// message RoomMember {
-//     UUID room_uuid = 1;
-//     UUID user_uuid = 2;
-// }
+message ServersideRoom {
+    UUID uuid = 1;
+    string name = 2;
+    repeated UUID members = 3;
+}

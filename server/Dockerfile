@@ -19,7 +19,7 @@ RUN \
     && export PATH="$PATH:$HOME/.local/bin" \
     && source .envrc \
     && cargo build --release \
-    && mv ./target/release/tcp-chat ./app"
+    && mv ./target/release/server ./app"
 
 
 

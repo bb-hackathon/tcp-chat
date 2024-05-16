@@ -4,49 +4,26 @@ option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
 
 import "entities.proto";
 
-// message ServersideMessageEvent {
-//     UUID room_uuid = 1;
+message ServersideRoomEvent {
+    UUID room_uuid = 1;
 
-//     oneof event {
-//         // Someone sent a new message.
-//         Message new_message = 2;
+    oneof event {
+        // Someone sent a new message in this chat room.
+        ServersideMessage new_message = 2;
 
-//         // A new user has joined the chat room.
-//         UserEvent user_joined = 3;
+        // A new user has joined this chat room.
+        // User user_joined = 3;
 
-//         // A user has left the chat room.
-//         UserEvent user_left = 4;
-//     }
+        // A user has left this chat room.
+        // User user_left = 4;
+    }
+}
 
-//     message UserEvent {
-//         User user = 1;
-//         UUID room_uuid = 2;
-//     }
-// }
+message ServersideUserEvent {
+    UUID room_uuid = 1;
 
-// message ClientsideMessageEvent {
-//     UUID room_uuid = 1;
-
-//     oneof type {
-//         Message new_message = 2;
-//     }
-// }
-
-// message ServersideUserEvent {
-//     UUID user_uuid = 1;
-
-//     oneof event {
-//         UUID added_to_room = 2;
-//         UUID kicked_from_room = 3;
-//     }
-// }
-
-// message ServerEvent {
-//     oneof event {
-//         Shutdown shutdown = 1;
-//     }
-
-//     message Shutdown {
-//         optional string info = 1;
-//     }
-// }
+    oneof event {
+        UUID added_to_room = 2;
+        // UUID kicked_from_room = 3;
+    }
+}

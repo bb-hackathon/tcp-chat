@@ -14,5 +14,6 @@ pkgs.mkShell {
         protobuf # Protocol Buffers, Google's data interchange format.
         grpcurl  # Command-line tool for interacting with gRPC servers.
         bloomrpc # GUI Client for gRPC Services (like Postman).
+        postgresql
     ];
 }

@@ -1,21 +1,18 @@
 [package]
-name = "tcp-chat"
+name = "tcp-chat-cli"
 version = "0.1.0"
 edition = "2021"
 authors = ["mxxntype <59417007+mxxntype@users.noreply.github.com>"]
 
 [[bin]]
-name = "server"
+name = "cli"
 path = "src/main.rs"
 
-[lib]
-path = "src/lib.rs"
-
 [dependencies]
+tcp-chat = { path = "../server" }
 async-stream = "0.3.5"
 color-eyre = "0.6.3"
 const_format = "0.2.32"
-diesel = { version = "2.1.6", features = ["postgres", "uuid"] }
 futures = "0.3.30"
 prost = "0.12.4"
 prost-types = "0.12.4"
@@ -26,8 +23,10 @@ tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1.15"
 tonic = "0.11.0"
 tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tracing-subscriber = "0.3.18"
 uuid = { version = "1.8.0", features = ["v4"] }
+promkit = "0.4.0"
+crossterm = "0.27.0"
 
 [build-dependencies]
 tonic-build = "0.11"

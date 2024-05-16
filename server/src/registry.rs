@@ -1,4 +1,4 @@
-use crate::entities::User;
+use crate::entities::{user::Repo, User};
 use crate::proto::{self, AuthPair, UserCredentials};
 use rand_chacha::ChaCha20Rng;
 use rand_core::{OsRng, RngCore, SeedableRng};
@@ -8,20 +8,20 @@ use tonic::{Request, Response, Status};
 
 #[derive(Debug)]
 pub struct Registry {
-    user_repo: Arc<Mutex<Vec<User>>>,
+    user_repo: Repo,
     rng: Arc<Mutex<ChaCha20Rng>>,
 }
 
 impl Registry {
     #[must_use]
-    pub fn get_user_repo(&self) -> Arc<Mutex<Vec<User>>> {
+    pub fn get_user_repo(&self) -> Repo {
         Arc::clone(&self.user_repo)
     }
 }
 
 #[tonic::async_trait]
 impl proto::registry_server::Registry for Registry {
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, request))]
     async fn register_new_user(
         &self,
         request: Request<UserCredentials>,
@@ -30,7 +30,7 @@ impl proto::registry_server::Registry for Registry {
         let username = credentials.username;
         let password = credentials.password;
         let mut user_repo = self.user_repo.lock().await;
-        let duplicate_user = user_repo.iter().find(|user| user.username() == username);
+        let duplicate_user = user_repo.iter().find(|user| user.username == username);
 
         match duplicate_user {
             // No duplicate usernames found, registering a new account.
@@ -53,7 +53,7 @@ impl proto::registry_server::Registry for Registry {
         }
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, request))]
     #[allow(clippy::significant_drop_tightening)]
     async fn login_as_user(
         &self,
@@ -65,15 +65,15 @@ impl proto::registry_server::Registry for Registry {
         let user_repo = self.user_repo.lock().await;
         let matching_user = user_repo
             .iter()
-            .find(|user| user.username() == username && user.password() == password);
+            .find(|user| user.username == username && user.password == password);
 
         match matching_user {
             // A an account with matching credentials exist, returns its UUID and token.
             Some(user) => {
-                tracing::info!(message = "Authentication successful", ?username);
+                tracing::debug!(message = "Authentication successful", ?username);
                 Ok(Response::new(AuthPair {
-                    user_uuid: Some((*user.uuid()).into()),
-                    token: Some(user.auth_token().clone().into()),
+                    user_uuid: Some(user.uuid.into()),
+                    token: Some(user.proto_token()),
                 }))
             }
 

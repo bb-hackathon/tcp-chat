@@ -1,42 +1,47 @@
-use crate::token::AuthToken;
+use crate::{proto, token::AuthToken};
+use diesel::prelude::*;
 use rand_chacha::ChaCha20Rng;
+use std::{str::FromStr, sync::Arc};
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
-#[derive(Debug)]
+pub type Repo = Arc<Mutex<Vec<User>>>;
+
+#[derive(Queryable, Selectable, Insertable, Identifiable, Clone, Debug)]
+#[diesel(table_name = crate::entities::schema::users)]
+#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(primary_key(uuid))]
 pub struct User {
-    username: String,
-    password: String,
-    uuid: Uuid,
-    auth_token: AuthToken,
+    pub uuid: Uuid,
+    pub username: String,
+    pub password: String,
+    pub auth_token: String,
 }
 
 impl User {
     pub fn new(username: String, password: String, rng: &mut ChaCha20Rng) -> Self {
         Self {
+            uuid: Uuid::new_v4(),
             username,
             password,
-            uuid: Uuid::new_v4(),
-            auth_token: AuthToken::new(rng),
+            auth_token: AuthToken::new(rng).to_string(),
         }
     }
 
-    #[must_use]
-    pub fn username(&self) -> &str {
-        &self.username
+    pub fn auth_token(&self) -> AuthToken {
+        AuthToken::from_str(&self.auth_token).expect("The database should only store valid UUIDs")
     }
 
-    #[must_use]
-    pub fn password(&self) -> &str {
-        &self.password
+    pub fn proto_token(&self) -> proto::AuthToken {
+        self.auth_token().into()
     }
+}
 
-    #[must_use]
-    pub const fn uuid(&self) -> &Uuid {
-        &self.uuid
-    }
-
-    #[must_use]
-    pub const fn auth_token(&self) -> &AuthToken {
-        &self.auth_token
+impl From<User> for proto::User {
+    fn from(user: User) -> Self {
+        Self {
+            uuid: Some(user.uuid.into()),
+            username: user.username,
+        }
     }
 }

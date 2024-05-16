@@ -1,17 +1,15 @@
-use crate::entities::User;
+use crate::entities::user::Repo;
 use crate::proto::{self, AuthPair};
 use crate::token::AuthToken;
 use std::str::FromStr;
-use std::sync::Arc;
-use tokio::{runtime::Handle, sync::Mutex};
+use tokio::runtime::Handle;
 use tonic::{service::Interceptor, Request, Response, Status};
 use uuid::Uuid;
-
-type UserRepo = Arc<Mutex<Vec<User>>>;
 
 #[allow(unused, clippy::missing_errors_doc)]
 pub trait AuthenticatedRequest {
     type Error;
+
     fn add_auth_pair(&mut self, auth_pair: AuthPair) -> Result<(), Self::Error>;
     fn get_auth_pair(&self) -> Result<AuthPair, Self::Error>;
 }
@@ -70,11 +68,11 @@ impl<T> AuthenticatedRequest for Request<T> {
 
 #[derive(Debug, Clone)]
 pub struct Authenticator {
-    user_repo: UserRepo,
+    user_repo: Repo,
 }
 
 impl Authenticator {
-    pub fn new(user_repo: UserRepo) -> Self {
+    pub fn new(user_repo: Repo) -> Self {
         Self { user_repo }
     }
 
@@ -94,14 +92,15 @@ impl Interceptor for Authenticator {
         let _ = Handle::current().enter();
         let user_repo = futures::executor::block_on(self.user_repo.lock());
         let matching_user = user_repo.iter().find(|user| {
-            Some((*user.uuid()).into()) == auth_pair.user_uuid
-                && Some((user.auth_token().clone()).into()) == auth_pair.token
+            Some(user.uuid.into()) == auth_pair.user_uuid
+                && Some(user.auth_token.as_str())
+                    == auth_pair.token.as_ref().map(|t| t.to_string()).as_deref()
         });
 
         match matching_user {
             Some(user) => {
-                let username = user.username();
-                tracing::info!(message = "Authenticated", ?username);
+                let username = &user.username;
+                tracing::debug!(message = "Authenticated request", ?username);
                 Ok(request)
             }
             None => Err(unauthenticated()),
@@ -110,7 +109,7 @@ impl Interceptor for Authenticator {
 }
 
 fn unauthenticated() -> Status {
-    tracing::warn!(message = "Unauthenticated");
+    tracing::warn!(message = "Interceptor caught an unauthenticated request!");
     Status::unauthenticated("The UUID+token pair was invalid or not provided in request metadata")
 }
 
@@ -133,6 +132,7 @@ impl proto::authentication_tester_server::AuthenticationTester for Authenticatio
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::AuthenticatedRequest;
     use crate::{entities::User, proto::AuthPair};
@@ -145,8 +145,8 @@ mod tests {
         let mut rng = ChaCha20Rng::seed_from_u64(OsRng.next_u64());
         let user = User::new("user_1".into(), "pass_1".into(), &mut rng);
         let auth_pair = AuthPair {
-            user_uuid: Some((*user.uuid()).into()),
-            token: Some((user.auth_token().clone()).into()),
+            user_uuid: Some(user.uuid.into()),
+            token: Some(user.proto_token()),
         };
 
         let mut request = Request::new(());
