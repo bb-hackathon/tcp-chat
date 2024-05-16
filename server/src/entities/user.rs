@@ -1,4 +1,7 @@
-use crate::{entities::token::AuthToken, proto};
+use crate::{
+    entities::token::AuthToken,
+    proto::{self, AuthPair},
+};
 use diesel::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::{str::FromStr, sync::Arc};
@@ -34,6 +37,13 @@ impl User {
 
     pub fn proto_token(&self) -> proto::AuthToken {
         self.auth_token().into()
+    }
+
+    pub fn auth_pair(&self) -> AuthPair {
+        AuthPair {
+            user_uuid: Some(self.uuid.into()),
+            token: Some(self.proto_token()),
+        }
     }
 }
 

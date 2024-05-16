@@ -1,4 +1,4 @@
-use crate::entities::user::Repo;
+use crate::persistence::ConnectionPool;
 use crate::proto::{self, ServersideUserEvent};
 use crate::proto::{ClientsideMessage, ClientsideRoom, ServersideRoomEvent, UserUuidLookupRequest};
 use std::pin::Pin;
@@ -7,12 +7,14 @@ use tonic::{Request, Response, Status};
 
 #[derive(Debug, Clone)]
 pub struct Chat {
-    user_repo: Repo,
+    _connection_pool: ConnectionPool,
 }
 
 impl Chat {
-    pub fn new(user_repo: Repo) -> Self {
-        Self { user_repo }
+    pub fn new(connection_pool: ConnectionPool) -> Self {
+        Self {
+            _connection_pool: connection_pool,
+        }
     }
 }
 
@@ -24,26 +26,28 @@ impl proto::chat_server::Chat for Chat {
     #[allow(clippy::significant_drop_tightening)]
     async fn lookup_user(
         &self,
-        request: Request<UserUuidLookupRequest>,
+        _request: Request<UserUuidLookupRequest>,
     ) -> Result<Response<proto::User>, Status> {
-        let lookup_request = request.into_inner();
-        let user_repo = self.user_repo.lock().await;
-        let user = user_repo
-            .iter()
-            .find(|user| user.username == lookup_request.username);
+        // let lookup_request = request.into_inner();
+        // let user_repo = self.user_repo.lock().await;
+        // let user = user_repo
+        //     .iter()
+        //     .find(|user| user.username == lookup_request.username);
 
-        match user {
-            Some(user) => {
-                let username = &user.username;
-                let uuid = &user.uuid;
-                tracing::debug!(message = "Successful user lookup", ?username, ?uuid);
-                Ok(Response::new(proto::User::from(user.clone())))
-            }
-            None => {
-                tracing::debug!(message = "Unsuccessful user lookup", ?lookup_request);
-                Err(Status::not_found("No user with such username"))
-            }
-        }
+        // match user {
+        //     Some(user) => {
+        //         let username = &user.username;
+        //         let uuid = &user.uuid;
+        //         tracing::debug!(message = "Successful user lookup", ?username, ?uuid);
+        //         Ok(Response::new(proto::User::from(user.clone())))
+        //     }
+        //     None => {
+        //         tracing::debug!(message = "Unsuccessful user lookup", ?lookup_request);
+        //         Err(Status::not_found("No user with such username"))
+        //     }
+        // }
+
+        unimplemented!()
     }
 
     #[tracing::instrument(skip(self))]
