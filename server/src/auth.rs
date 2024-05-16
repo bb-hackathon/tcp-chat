@@ -80,16 +80,20 @@ impl Authenticator {
 }
 
 impl Interceptor for Authenticator {
-    fn call(&mut self, request: Request<()>) -> Result<Request<()>, Status> {
+    fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
         let auth_pair: AuthPair = request.get_auth_pair().map_err(|_| unauthenticated())?;
         let user_uuid: Uuid = auth_pair
             .user_uuid
             .and_then(|u| u.try_into().ok())
-            .ok_or_else(|| unauthenticated())?;
+            .ok_or_else(unauthenticated)?;
         let proto_auth_token: String = auth_pair
             .token
             .map(|t| t.to_string())
-            .ok_or_else(|| unauthenticated())?;
+            .ok_or_else(unauthenticated)?;
+
+        // WARN: Wipe out the AuthToken from the request's metadata,
+        // so it doesn't accidently appear anywhere else (i.e. logs).
+        let _ = request.metadata_mut().remove(Self::AUTH_TOKEN_KEY);
 
         let mut connection = self
             .connection_pool

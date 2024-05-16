@@ -5,8 +5,11 @@ use clap::Parser;
 use options::Action;
 use promkit::preset::{password::Password, readline::Readline};
 use std::panic;
+use tcp_chat::auth::AuthenticatedRequest;
+use tcp_chat::proto::chat_client::ChatClient;
 use tcp_chat::proto::registry_client::RegistryClient;
-use tcp_chat::proto::UserCredentials;
+use tcp_chat::proto::{UserCredentials, UserUuidLookupRequest};
+use tonic::Request;
 
 #[tokio::main]
 async fn main() {
@@ -51,14 +54,29 @@ async fn main() {
                 .await
                 .unwrap();
         }
-        Action::Login => {
+        action @ (Action::Login | Action::LookupUser) => {
             let auth_pair = registry
                 .login_as_user(credentials)
                 .await
                 .unwrap()
                 .into_inner();
-            crossterm::terminal::disable_raw_mode().unwrap();
-            println!("{auth_pair:?}");
+            match action {
+                Action::Login => {
+                    crossterm::terminal::disable_raw_mode().unwrap();
+                    println!("{auth_pair:?}");
+                }
+                Action::LookupUser => {
+                    let mut chat = ChatClient::connect("http://localhost:9001").await.unwrap();
+                    let username_to_lookup = username_prompt.run().unwrap();
+                    let mut request = Request::new(UserUuidLookupRequest {
+                        username: username_to_lookup,
+                    });
+                    request.add_auth_pair(auth_pair).unwrap();
+                    let user = chat.lookup_user(request).await.unwrap().into_inner();
+                    println!("{user:?}");
+                }
+                Action::Register => unreachable!(),
+            }
         }
     }
 }

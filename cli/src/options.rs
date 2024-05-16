@@ -10,6 +10,7 @@ pub struct Options {
 pub enum Action {
     Register,
     Login,
+    LookupUser,
 }
 
 impl Options {

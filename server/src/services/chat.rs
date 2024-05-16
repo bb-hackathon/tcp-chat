@@ -1,3 +1,4 @@
+use crate::entities::User;
 use crate::persistence::ConnectionPool;
 use crate::proto::{self, ServersideUserEvent};
 use crate::proto::{ClientsideMessage, ClientsideRoom, ServersideRoomEvent, UserUuidLookupRequest};
@@ -7,14 +8,12 @@ use tonic::{Request, Response, Status};
 
 #[derive(Debug, Clone)]
 pub struct Chat {
-    _connection_pool: ConnectionPool,
+    connection_pool: ConnectionPool,
 }
 
 impl Chat {
     pub fn new(connection_pool: ConnectionPool) -> Self {
-        Self {
-            _connection_pool: connection_pool,
-        }
+        Self { connection_pool }
     }
 }
 
@@ -25,28 +24,37 @@ impl proto::chat_server::Chat for Chat {
     #[tracing::instrument(skip(self))]
     async fn lookup_user(
         &self,
-        _request: Request<UserUuidLookupRequest>,
+        request: Request<UserUuidLookupRequest>,
     ) -> Result<Response<proto::User>, Status> {
-        // let lookup_request = request.into_inner();
-        // let user_repo = self.user_repo.lock().await;
-        // let user = user_repo
-        //     .iter()
-        //     .find(|user| user.username == lookup_request.username);
+        let lookup_request = request.get_ref();
 
-        // match user {
-        //     Some(user) => {
-        //         let username = &user.username;
-        //         let uuid = &user.uuid;
-        //         tracing::debug!(message = "Successful user lookup", ?username, ?uuid);
-        //         Ok(Response::new(proto::User::from(user.clone())))
-        //     }
-        //     None => {
-        //         tracing::debug!(message = "Unsuccessful user lookup", ?lookup_request);
-        //         Err(Status::not_found("No user with such username"))
-        //     }
-        // }
+        let mut connection = self
+            .connection_pool
+            .get()
+            .map_err(|_| Status::internal("Could not acquire a database connection"))?;
 
-        unimplemented!()
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
+        use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
+        use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
+
+        let user_with_matching_username = users
+            .filter(username.eq(&lookup_request.username))
+            .select(User::as_select())
+            .first(&mut connection)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?;
+
+        match user_with_matching_username {
+            Some(user) => {
+                tracing::debug!(message = "Successful user lookup", username = ?lookup_request.username, uuid = ?user.uuid);
+                Ok(Response::new(proto::User::from(user.clone())))
+            }
+            None => {
+                tracing::debug!(message = "Unsuccessful user lookup", username = ?lookup_request.username);
+                Err(Status::not_found("No user with such username"))
+            }
+        }
     }
 
     #[tracing::instrument(skip(self))]
