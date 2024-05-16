@@ -53,7 +53,7 @@ message User {
 }
 
 // The entity that the client sends to the server whenever the user sends a new
-// message. The UUID of the user is embeded in the requests metadata, so all we
+// message. The UUID of the user is embedded in the requests metadata, so all we
 // need to know are the contents of the message and the UUID of the room that
 // this message belongs to.
 //
