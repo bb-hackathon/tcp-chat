@@ -1,7 +1,9 @@
 use super::{ConversionError, Room, User};
+use crate::auth::Authenticator;
 use crate::proto::{ClientsideMessage, ServersideMessage};
 use diesel::prelude::*;
-use std::{fmt, time::SystemTime};
+use std::{fmt, str::FromStr, time::SystemTime};
+use tonic::{Request, Status};
 use uuid::Uuid;
 
 #[derive(Queryable, Identifiable, Selectable, Insertable, Debug, Clone, Associations)]
@@ -50,6 +52,24 @@ impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: {}", self.sender_uuid, self.text)?;
         Ok(())
+    }
+}
+
+impl TryFrom<Request<ClientsideMessage>> for Message {
+    type Error = Status;
+
+    fn try_from(request: Request<ClientsideMessage>) -> Result<Self, Self::Error> {
+        let invalid_uuid_msg = "The sender's UUID is invalid or missing from request's metadata";
+        let user_uuid: Uuid = request
+            .metadata()
+            .get(Authenticator::USER_UUID_KEY)
+            .and_then(|mv| mv.to_str().ok())
+            .and_then(|s| Uuid::from_str(s).ok())
+            .ok_or(Status::invalid_argument(invalid_uuid_msg))?;
+
+        let msg = request.into_inner();
+        Message::from_clientside_message(msg, user_uuid)
+            .map_err(|err| Status::invalid_argument(err.to_string()))
     }
 }
 

@@ -1,10 +1,14 @@
-use crate::entities::User;
+use crate::auth::AuthenticatedRequest;
+use crate::entities::{Message, Room, User};
 use crate::persistence::ConnectionPool;
-use crate::proto::{self, ServersideUserEvent};
-use crate::proto::{ClientsideMessage, ClientsideRoom, ServersideRoomEvent, UserUuidLookupRequest};
+use crate::proto::{self, RoomWithUserCreationRequest};
+use crate::proto::{ClientsideMessage, ClientsideRoom, ServersideRoomEvent, ServersideUserEvent};
+use crate::proto::{UserUuidLookupRequest, UsernameLookupRequest};
+use crate::services::acquire_connection_error_status;
 use std::pin::Pin;
 use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
+use uuid::Uuid;
 
 #[derive(Debug, Clone)]
 pub struct Chat {
@@ -22,7 +26,7 @@ type RPCStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send + 'stati
 #[tonic::async_trait]
 impl proto::chat_server::Chat for Chat {
     #[tracing::instrument(skip(self))]
-    async fn lookup_user(
+    async fn lookup_user_uuid(
         &self,
         request: Request<UserUuidLookupRequest>,
     ) -> Result<Response<proto::User>, Status> {
@@ -31,7 +35,7 @@ impl proto::chat_server::Chat for Chat {
         let mut connection = self
             .connection_pool
             .get()
-            .map_err(|_| Status::internal("Could not acquire a database connection"))?;
+            .map_err(acquire_connection_error_status)?;
 
         // Import some traits and methods to interact with the ORM.
         use crate::entities::schema::users::dsl::*;
@@ -58,16 +62,123 @@ impl proto::chat_server::Chat for Chat {
     }
 
     #[tracing::instrument(skip(self))]
-    async fn send_message(
+    async fn lookup_username(
         &self,
-        _request: Request<ClientsideMessage>,
-    ) -> Result<Response<()>, Status> {
-        unimplemented!()
+        request: Request<UsernameLookupRequest>,
+    ) -> Result<Response<proto::User>, Status> {
+        let lookup_request = request.get_ref();
+        let lookup_uuid = lookup_request
+            .uuid
+            .clone()
+            .and_then(|u| Uuid::try_from(u).ok())
+            .ok_or(Status::invalid_argument("Invalid UUID"))?;
+
+        let mut connection = self
+            .connection_pool
+            .get()
+            .map_err(acquire_connection_error_status)?;
+
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
+        use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
+        use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
+
+        let user_with_matching_uuid = users
+            .filter(uuid.eq(lookup_uuid))
+            .select(User::as_select())
+            .first(&mut connection)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?;
+
+        match user_with_matching_uuid {
+            Some(user) => {
+                tracing::debug!(message = "Successful user lookup", username = ?user.username, uuid = ?user.uuid);
+                Ok(Response::new(proto::User::from(user.clone())))
+            }
+            None => {
+                tracing::debug!(message = "Unsuccessful user lookup", uuid = ?lookup_uuid);
+                Err(Status::not_found("No user with such username"))
+            }
+        }
     }
 
     #[tracing::instrument(skip(self))]
-    async fn create_room(&self, _request: Request<ClientsideRoom>) -> Result<Response<()>, Status> {
-        unimplemented!()
+    async fn send_message(
+        &self,
+        request: Request<ClientsideMessage>,
+    ) -> Result<Response<()>, Status> {
+        let message = Message::try_from(request)?;
+        let mut conn = self
+            .connection_pool
+            .get()
+            .map_err(acquire_connection_error_status)?;
+
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::messages::dsl::*;
+        use diesel::RunQueryDsl;
+        let _ = diesel::insert_into(messages)
+            .values(&message)
+            .execute(&mut conn)
+            .map_err(|err| Status::internal(err.to_string()))?;
+
+        Ok(Response::new(()))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn create_room(
+        &self,
+        request: Request<ClientsideRoom>,
+    ) -> Result<Response<proto::Uuid>, Status> {
+        let mut connection = self
+            .connection_pool
+            .get()
+            .map_err(acquire_connection_error_status)?;
+        let room = request.into_inner();
+        let room_uuid = Room::from_room_with_members(room, &mut connection)?;
+
+        Ok(Response::new(room_uuid.into()))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn create_room_with_user(
+        &self,
+        request: Request<RoomWithUserCreationRequest>,
+    ) -> Result<Response<proto::Uuid>, Status> {
+        let originator_uuid = request
+            .get_originator()
+            .map_err(|err| Status::internal(err.to_string()))?;
+        let possible_interlocutor_uuid = request
+            .into_inner()
+            .user_uuid
+            .and_then(|u| Uuid::try_from(u).ok())
+            .ok_or(Status::invalid_argument(""))?;
+
+        let mut connection = self
+            .connection_pool
+            .get()
+            .map_err(acquire_connection_error_status)?;
+
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
+        use diesel::prelude::*;
+
+        let interlocutor = users
+            .find(possible_interlocutor_uuid)
+            .select(User::as_select())
+            .first(&mut connection)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?
+            .ok_or(Status::internal("No such user"))?;
+
+        let private_room_uuid = Room::from_room_with_members(
+            ClientsideRoom {
+                name: format!("Private chat between {} and ...", interlocutor.username),
+                members: vec![interlocutor.uuid.into(), originator_uuid.into()],
+            },
+            &mut connection,
+        )?;
+
+        Ok(Response::new(private_room_uuid.into()))
     }
 
     type SubscribeToRoomStream = RPCStream<ServersideRoomEvent>;

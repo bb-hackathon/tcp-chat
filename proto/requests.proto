@@ -3,13 +3,20 @@ package tcp_chat;
 option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
 
 import "entities.proto";
-// import "google/protobuf/empty.proto";
 
 message UserUUIDLookupRequest {
     string username = 1;
 }
 
+message UsernameLookupRequest {
+    UUID uuid = 1;
+}
+
 message RoomCreationRequest {
     string name = 1;
     repeated UUID user_uuids = 2;
+}
+
+message RoomWithUserCreationRequest {
+    UUID user_uuid = 1;
 }

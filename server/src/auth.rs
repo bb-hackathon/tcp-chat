@@ -1,5 +1,6 @@
 use crate::entities::User;
 use crate::proto::AuthPair;
+use crate::services::acquire_connection_error_status;
 use crate::{entities::token::AuthToken, persistence::ConnectionPool};
 use std::str::FromStr;
 use tonic::{service::Interceptor, Request, Status};
@@ -9,6 +10,8 @@ use uuid::Uuid;
 pub trait AuthenticatedRequest {
     type Error;
 
+    fn get_originator(&self) -> Result<Uuid, Self::Error>;
+    fn get_token(&self) -> Result<AuthToken, Self::Error>;
     fn add_auth_pair(&mut self, auth_pair: AuthPair) -> Result<(), Self::Error>;
     fn get_auth_pair(&self) -> Result<AuthPair, Self::Error>;
 }
@@ -44,24 +47,29 @@ impl<T> AuthenticatedRequest for Request<T> {
     }
 
     fn get_auth_pair(&self) -> Result<AuthPair, Self::Error> {
-        let error = AuthMetadataError::RetrievalError;
-        let metadata = self.metadata();
-        let user_uuid = metadata
-            .get(Authenticator::USER_UUID_KEY)
-            .and_then(|m| m.to_str().ok())
-            .and_then(|m| Uuid::from_str(m).ok());
-        let auth_token = metadata
-            .get(Authenticator::AUTH_TOKEN_KEY)
-            .and_then(|m| m.to_str().ok())
-            .and_then(|m| AuthToken::from_str(m).ok());
-
-        match (user_uuid, auth_token) {
-            (Some(user_uuid), Some(auth_token)) => Ok(AuthPair {
+        match (self.get_originator(), self.get_token()) {
+            (Ok(user_uuid), Ok(auth_token)) => Ok(AuthPair {
                 user_uuid: Some(user_uuid.into()),
                 token: Some(auth_token.into()),
             }),
-            _ => Err(error),
+            _ => Err(AuthMetadataError::RetrievalError),
         }
+    }
+
+    fn get_originator(&self) -> Result<Uuid, Self::Error> {
+        self.metadata()
+            .get(Authenticator::USER_UUID_KEY)
+            .and_then(|m| m.to_str().ok())
+            .and_then(|m| Uuid::from_str(m).ok())
+            .ok_or(AuthMetadataError::RetrievalError)
+    }
+
+    fn get_token(&self) -> Result<AuthToken, Self::Error> {
+        self.metadata()
+            .get(Authenticator::AUTH_TOKEN_KEY)
+            .and_then(|m| m.to_str().ok())
+            .and_then(|m| AuthToken::from_str(m).ok())
+            .ok_or(AuthMetadataError::RetrievalError)
     }
 }
 
@@ -98,7 +106,7 @@ impl Interceptor for Authenticator {
         let mut connection = self
             .connection_pool
             .get()
-            .map_err(|_| Status::internal("Could not acquire a database connection"))?;
+            .map_err(acquire_connection_error_status)?;
 
         // Import some traits and methods to interact with the ORM.
         use crate::entities::schema::users::dsl::*;

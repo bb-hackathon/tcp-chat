@@ -11,6 +11,8 @@ pub enum Action {
     Register,
     Login,
     LookupUser,
+    CreatePrivateRoom,
+    SendMessage,
 }
 
 impl Options {
