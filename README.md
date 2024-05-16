@@ -10,9 +10,18 @@
 > Это наиболее разумный способ развертывания. Остальные приведены для справки.
 
 ```bash
-docker build -t tcp-chat                      # Собрать только контейнер с сервером.
-docker compose up --detach --build tcp-server # Поднять всю серверную часть. (БД, сервер, pgAdmin)
-docker compose down                           # Shutdown серверной части.
+# Собрать только контейнер с сервером.
+cd server && docker build . -t tcp-chat
+
+# Поднять всю серверную часть. (БД, прогон конверсий, сервер, pgAdmin)
+docker compose up --detach --build server sqlrunner
+
+# Просмотр логов.
+docker compose logs --follow
+docker compose logs <service> --follow # Логи конкретного сервиса.
+
+# Shutdown серверной части.
+docker compose down
 ```
 
 ### Без контейнеризации
