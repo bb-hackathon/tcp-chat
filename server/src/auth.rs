@@ -1,9 +1,9 @@
+use crate::entities::token::AuthToken;
 use crate::entities::user::Repo;
-use crate::proto::{self, AuthPair};
-use crate::token::AuthToken;
+use crate::proto::AuthPair;
 use std::str::FromStr;
 use tokio::runtime::Handle;
-use tonic::{service::Interceptor, Request, Response, Status};
+use tonic::{service::Interceptor, Request, Status};
 use uuid::Uuid;
 
 #[allow(unused, clippy::missing_errors_doc)]
@@ -111,24 +111,6 @@ impl Interceptor for Authenticator {
 fn unauthenticated() -> Status {
     tracing::warn!(message = "Interceptor caught an unauthenticated request!");
     Status::unauthenticated("The UUID+token pair was invalid or not provided in request metadata")
-}
-
-#[derive(Debug, Default)]
-pub struct AuthenticationTester {}
-
-impl AuthenticationTester {
-    #[must_use]
-    pub const fn new() -> Self {
-        Self {}
-    }
-}
-
-#[tonic::async_trait]
-impl proto::authentication_tester_server::AuthenticationTester for AuthenticationTester {
-    #[tracing::instrument(skip(self))]
-    async fn test_authentication(&self, _request: Request<()>) -> Result<Response<()>, Status> {
-        Ok(Response::new(()))
-    }
 }
 
 #[cfg(test)]

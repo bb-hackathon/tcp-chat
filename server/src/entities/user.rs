@@ -1,4 +1,4 @@
-use crate::{proto, token::AuthToken};
+use crate::{entities::token::AuthToken, proto};
 use diesel::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::{str::FromStr, sync::Arc};

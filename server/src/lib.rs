@@ -1,18 +1,15 @@
 #![deny(clippy::unwrap_used)]
 
 pub mod auth;
-pub mod chat;
 pub mod entities;
-pub mod registry;
-pub mod token;
-pub mod uuid;
+pub mod persistence;
+pub mod services;
 
-use crate::auth::{AuthenticationTester, Authenticator};
-use crate::chat::Chat;
+use crate::auth::Authenticator;
 use crate::proto::authentication_tester_server::AuthenticationTesterServer;
 use crate::proto::chat_server::ChatServer;
 use crate::proto::registry_server::RegistryServer;
-use crate::registry::Registry;
+use crate::services::{auth_tester::AuthenticationTester, chat::Chat, registry::Registry};
 use const_format::formatcp;
 use tonic::transport::Server;
 use tracing_subscriber::fmt;
