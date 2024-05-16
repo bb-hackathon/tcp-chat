@@ -1,3 +1,4 @@
+use crate::entities::User;
 use crate::proto::AuthPair;
 use crate::{entities::token::AuthToken, persistence::ConnectionPool};
 use std::str::FromStr;
@@ -66,14 +67,12 @@ impl<T> AuthenticatedRequest for Request<T> {
 
 #[derive(Debug, Clone)]
 pub struct Authenticator {
-    _connection_pool: ConnectionPool,
+    connection_pool: ConnectionPool,
 }
 
 impl Authenticator {
     pub fn new(connection_pool: ConnectionPool) -> Self {
-        Self {
-            _connection_pool: connection_pool,
-        }
+        Self { connection_pool }
     }
 
     pub const USER_UUID_KEY: &'static str = "user_uuid";
@@ -81,35 +80,45 @@ impl Authenticator {
 }
 
 impl Interceptor for Authenticator {
-    fn call(&mut self, _request: Request<()>) -> Result<Request<()>, Status> {
-        // let auth_pair = request.get_auth_pair().map_err(|_| unauthenticated())?;
+    fn call(&mut self, request: Request<()>) -> Result<Request<()>, Status> {
+        let auth_pair: AuthPair = request.get_auth_pair().map_err(|_| unauthenticated())?;
+        let user_uuid: Uuid = auth_pair
+            .user_uuid
+            .and_then(|u| u.try_into().ok())
+            .ok_or_else(|| unauthenticated())?;
+        let proto_auth_token: String = auth_pair
+            .token
+            .map(|t| t.to_string())
+            .ok_or_else(|| unauthenticated())?;
 
-        // // HACK: This is a horrible, but also the only possible way to .await
-        // // an asynchronous tokio::sync::Mutex inside of a non-async function.
-        // //
-        // // See https://stackoverflow.com/questions/66035290 for information.
-        // let _ = Handle::current().enter();
-        // let user_repo = futures::executor::block_on(self.user_repo.lock());
-        // let matching_user = user_repo.iter().find(|user| {
-        //     Some(user.uuid.into()) == auth_pair.user_uuid
-        //         && Some(user.auth_token.as_str())
-        //             == auth_pair.token.as_ref().map(|t| t.to_string()).as_deref()
-        // });
+        let mut connection = self
+            .connection_pool
+            .get()
+            .map_err(|_| Status::internal("Could not acquire a database connection"))?;
 
-        // match matching_user {
-        //     Some(user) => {
-        //         let username = &user.username;
-        //         tracing::debug!(message = "Authenticated request", ?username);
-        //         Ok(request)
-        //     }
-        //     None => Err(unauthenticated()),
-        // }
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
+        use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
+        use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
 
-        unimplemented!()
+        let user_with_matching_credentials = users
+            .filter(uuid.eq(user_uuid))
+            .filter(auth_token.eq(proto_auth_token))
+            .select(User::as_select())
+            .first(&mut connection)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?;
+
+        match user_with_matching_credentials {
+            Some(user) => {
+                tracing::debug!(message = "Authenticated request", username = ?user.username);
+                Ok(request)
+            }
+            None => Err(unauthenticated()),
+        }
     }
 }
 
-#[allow(unused)]
 fn unauthenticated() -> Status {
     tracing::warn!(message = "Interceptor caught an unauthenticated request!");
     Status::unauthenticated("The UUID+token pair was invalid or not provided in request metadata")

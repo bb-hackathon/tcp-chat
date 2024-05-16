@@ -21,8 +21,8 @@ async fn authentication() {
 
     let (_, auth_pair) = common::register_with_credentials(
         UserCredentials {
-            username: "user_1".into(),
-            password: "pass_1".into(),
+            username: "user_3".into(),
+            password: "pass_3".into(),
         },
         &mut registry_client,
     )
@@ -47,8 +47,8 @@ async fn authentication_fail_no_token() {
 
     let (_, auth_pair) = common::register_with_credentials(
         UserCredentials {
-            username: "user_1".into(),
-            password: "pass_1".into(),
+            username: "user_4".into(),
+            password: "pass_4".into(),
         },
         &mut registry_client,
     )
@@ -77,8 +77,8 @@ async fn authentication_fail_no_uuid() {
 
     let (_, auth_pair) = common::register_with_credentials(
         UserCredentials {
-            username: "user_1".into(),
-            password: "pass_1".into(),
+            username: "user_5".into(),
+            password: "pass_5".into(),
         },
         &mut registry_client,
     )

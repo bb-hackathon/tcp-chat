@@ -1,4 +1,3 @@
-use crate::entities::schema::users::dsl::*;
 use crate::entities::User;
 use crate::persistence::ConnectionPool;
 use crate::proto::{self, AuthPair, UserCredentials};
@@ -37,6 +36,7 @@ impl proto::registry_server::Registry for Registry {
             .map_err(|_| Status::internal("Database pool error"))?;
 
         // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
         use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
         use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
 
@@ -81,6 +81,7 @@ impl proto::registry_server::Registry for Registry {
             .map_err(|_| Status::internal("Database pool error"))?;
 
         // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
         use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
         use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
 

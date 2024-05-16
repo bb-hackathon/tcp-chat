@@ -27,8 +27,8 @@ async fn login() {
         .unwrap();
 
     let credentials = UserCredentials {
-        username: "user_1".into(),
-        password: "pass_1".into(),
+        username: "user_2".into(),
+        password: "pass_2".into(),
     };
     assert!(client.register_new_user(credentials.clone()).await.is_ok());
 
