@@ -1,5 +1,5 @@
 use crate::proto;
-use rand_chacha::ChaChaRng;
+use rand_chacha::ChaCha20Rng;
 use rand_core::RngCore;
 use std::{fmt, num::ParseIntError, str::FromStr};
 
@@ -10,7 +10,7 @@ pub struct AuthToken {
 }
 
 impl AuthToken {
-    pub fn new(random: &mut ChaChaRng) -> Self {
+    pub fn new(random: &mut ChaCha20Rng) -> Self {
         let mut u128_pool = [0u8; 16];
         random.fill_bytes(&mut u128_pool);
         let token = u128::from_le_bytes(u128_pool);
