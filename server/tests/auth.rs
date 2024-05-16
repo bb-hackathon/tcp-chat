@@ -4,10 +4,10 @@ mod common;
 
 use common::start_test_server;
 use tcp_chat::auth::{AuthenticatedRequest, Authenticator};
+use tcp_chat::entities::AuthToken;
 use tcp_chat::proto::authentication_tester_client::AuthenticationTesterClient;
 use tcp_chat::proto::registry_client::RegistryClient;
 use tcp_chat::proto::UserCredentials;
-use tcp_chat::token::AuthToken;
 use tonic::Request;
 use uuid::Uuid;
 
