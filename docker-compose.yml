@@ -23,6 +23,17 @@ services:
         depends_on:
             - postgresql
 
+    redis:
+        image: redis:latest
+        hostname: ${REDIS_HOST}
+        restart: unless-stopped
+        env_file:
+            - .envrc
+        volumes:
+            - redis-data:/data
+        ports:
+            - "${REDIS_PORT}:${REDIS_PORT}"
+
     server:
         build:
             context: .
@@ -37,6 +48,7 @@ services:
         depends_on:
             - postgresql
             - sqlrunner
+            - redis
 
     pgadmin:
         image: elestio/pgadmin:latest
@@ -52,4 +64,5 @@ services:
 
 volumes:
     postgresql-data:
+    redis-data:
     pgadmin-data:
