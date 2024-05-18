@@ -33,9 +33,8 @@ service Registry {
 // it in any way, a client must first interact with the Registry service to get
 // an AuthPair from it, and embed it in the request's metadata section.
 service Chat {
-    // Look up a user account by username.
-    rpc LookupUserUUID (UserUUIDLookupRequest) returns (User);
-    rpc LookupUsername (UsernameLookupRequest) returns (User);
+    // Look up a user account by username or UUID.
+    rpc LookupUser (UserLookupRequest) returns (User);
     
     rpc SubscribeToRoom (UUID) returns (stream ServersideRoomEvent);
     rpc SendMessage (ClientsideMessage) returns (google.protobuf.Empty);

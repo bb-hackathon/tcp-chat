@@ -8,8 +8,9 @@ use std::panic;
 use tcp_chat::auth::AuthenticatedRequest;
 use tcp_chat::proto::chat_client::ChatClient;
 use tcp_chat::proto::registry_client::RegistryClient;
+use tcp_chat::proto::user_lookup_request::Identifier;
 use tcp_chat::proto::{ClientsideMessage, RoomWithUserCreationRequest};
-use tcp_chat::proto::{UserCredentials, UserUuidLookupRequest};
+use tcp_chat::proto::{UserCredentials, UserLookupRequest};
 use tonic::transport::Channel;
 use tonic::Request;
 use uuid::uuid;
@@ -75,10 +76,9 @@ async fn main() {
             match action {
                 Action::Login => println!("Successfully authenticated!"),
                 Action::LookupUser => {
-                    let username_to_lookup = username_prompt.run().unwrap();
                     let user = chat
-                        .lookup_user_uuid(UserUuidLookupRequest {
-                            username: username_to_lookup,
+                        .lookup_user(UserLookupRequest {
+                            identifier: Some(Identifier::Username(username_prompt.run().unwrap())),
                         })
                         .await
                         .unwrap()
@@ -87,8 +87,8 @@ async fn main() {
                 }
                 Action::CreatePrivateRoom => {
                     let interlocutor = chat
-                        .lookup_user_uuid(UserUuidLookupRequest {
-                            username: username_prompt.run().unwrap(),
+                        .lookup_user(UserLookupRequest {
+                            identifier: Some(Identifier::Username(username_prompt.run().unwrap())),
                         })
                         .await
                         .unwrap()

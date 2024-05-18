@@ -1,9 +1,9 @@
 use crate::auth::AuthenticatedRequest;
-use crate::entities::{Message, Room, User};
+use crate::entities::{Message, Room, RoomUser, User};
 use crate::persistence::ConnectionPool;
-use crate::proto::{self, RoomWithUserCreationRequest};
+use crate::proto::user_lookup_request::Identifier;
+use crate::proto::{self, RoomWithUserCreationRequest, UserLookupRequest};
 use crate::proto::{ClientsideMessage, ClientsideRoom, ServersideRoomEvent, ServersideUserEvent};
-use crate::proto::{UserUuidLookupRequest, UsernameLookupRequest};
 use crate::services::acquire_connection_error_status;
 use std::pin::Pin;
 use tokio_stream::Stream;
@@ -26,11 +26,17 @@ type RPCStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send + 'stati
 #[tonic::async_trait]
 impl proto::chat_server::Chat for Chat {
     #[tracing::instrument(skip(self))]
-    async fn lookup_user_uuid(
+    async fn lookup_user(
         &self,
-        request: Request<UserUuidLookupRequest>,
+        request: Request<UserLookupRequest>,
     ) -> Result<Response<proto::User>, Status> {
-        let lookup_request = request.get_ref();
+        let identifier: Identifier =
+            request
+                .into_inner()
+                .identifier
+                .ok_or(Status::invalid_argument(
+                    "Can't lookup user without an identifier",
+                ))?;
 
         let mut connection = self
             .connection_pool
@@ -39,64 +45,28 @@ impl proto::chat_server::Chat for Chat {
 
         // Import some traits and methods to interact with the ORM.
         use crate::entities::schema::users::dsl::*;
-        use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
-        use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
+        use diesel::prelude::*;
 
-        let user_with_matching_username = users
-            .filter(username.eq(&lookup_request.username))
-            .select(User::as_select())
-            .first(&mut connection)
-            .optional()
-            .map_err(|err| Status::internal(err.to_string()))?;
-
-        match user_with_matching_username {
-            Some(user) => {
-                tracing::debug!(message = "Successful user lookup", username = ?lookup_request.username, uuid = ?user.uuid);
-                Ok(Response::new(proto::User::from(user.clone())))
-            }
-            None => {
-                tracing::debug!(message = "Unsuccessful user lookup", username = ?lookup_request.username);
-                Err(Status::not_found("No user with such username"))
-            }
+        let found_user: Option<User> = match identifier.clone() {
+            Identifier::Uuid(proto_uuid) => users
+                .filter(uuid.eq::<Uuid>(Uuid::try_from(proto_uuid).unwrap()))
+                .select(User::as_select())
+                .first(&mut connection),
+            Identifier::Username(proto_uname) => users
+                .filter(username.eq(proto_uname))
+                .select(User::as_select())
+                .first(&mut connection),
         }
-    }
+        .optional()
+        .map_err(|err| Status::internal(err.to_string()))?;
 
-    #[tracing::instrument(skip(self))]
-    async fn lookup_username(
-        &self,
-        request: Request<UsernameLookupRequest>,
-    ) -> Result<Response<proto::User>, Status> {
-        let lookup_request = request.get_ref();
-        let lookup_uuid = lookup_request
-            .uuid
-            .clone()
-            .and_then(|u| Uuid::try_from(u).ok())
-            .ok_or(Status::invalid_argument("Invalid UUID"))?;
-
-        let mut connection = self
-            .connection_pool
-            .get()
-            .map_err(acquire_connection_error_status)?;
-
-        // Import some traits and methods to interact with the ORM.
-        use crate::entities::schema::users::dsl::*;
-        use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
-        use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
-
-        let user_with_matching_uuid = users
-            .filter(uuid.eq(lookup_uuid))
-            .select(User::as_select())
-            .first(&mut connection)
-            .optional()
-            .map_err(|err| Status::internal(err.to_string()))?;
-
-        match user_with_matching_uuid {
+        match found_user {
             Some(user) => {
                 tracing::debug!(message = "Successful user lookup", username = ?user.username, uuid = ?user.uuid);
                 Ok(Response::new(proto::User::from(user.clone())))
             }
             None => {
-                tracing::debug!(message = "Unsuccessful user lookup", uuid = ?lookup_uuid);
+                tracing::debug!(message = "Unsuccessful user lookup", ?identifier);
                 Err(Status::not_found("No user with such username"))
             }
         }
@@ -108,18 +78,41 @@ impl proto::chat_server::Chat for Chat {
         request: Request<ClientsideMessage>,
     ) -> Result<Response<()>, Status> {
         let message = Message::try_from(request)?;
+
         let mut conn = self
             .connection_pool
             .get()
             .map_err(acquire_connection_error_status)?;
 
-        // Import some traits and methods to interact with the ORM.
-        use crate::entities::schema::messages::dsl::*;
-        use diesel::RunQueryDsl;
-        let _ = diesel::insert_into(messages)
-            .values(&message)
-            .execute(&mut conn)
-            .map_err(|err| Status::internal(err.to_string()))?;
+        // Ensure the user isn't sending a message to a room he's not a member of.
+        {
+            use crate::entities::schema::rooms_users::dsl::*;
+            use diesel::prelude::*;
+            let _membership: RoomUser = rooms_users
+                .find((message.room_uuid, message.sender_uuid))
+                .select(RoomUser::as_select())
+                .first(&mut conn)
+                .map_err(|_| {
+                    let msg = "User tried to send a message to a room he's not a member of";
+                    tracing::warn!(message = msg, ?message);
+                    Status::permission_denied("You're not a member of this room!")
+                })?;
+        }
+
+        // Store the message in the database and TODO: mirror it to all subscribers.
+        {
+            use crate::entities::schema::messages::dsl::*;
+            use diesel::prelude::*;
+            let _ = diesel::insert_into(messages)
+                .values(&message)
+                .execute(&mut conn)
+                .map_err(|err| {
+                    tracing::error!(message = "Could not store message!", ?err);
+                    Status::internal("Could not send the message due to an internal error")
+                })?;
+        }
+
+        tracing::info!(message = "New message", sender = ?message.sender_uuid, room = ?message.room_uuid);
 
         Ok(Response::new(()))
     }
@@ -151,7 +144,7 @@ impl proto::chat_server::Chat for Chat {
             .into_inner()
             .user_uuid
             .and_then(|u| Uuid::try_from(u).ok())
-            .ok_or(Status::invalid_argument(""))?;
+            .ok_or(Status::invalid_argument("Invalid interlocutor UUID"))?;
 
         let mut connection = self
             .connection_pool
@@ -170,9 +163,21 @@ impl proto::chat_server::Chat for Chat {
             .map_err(|err| Status::internal(err.to_string()))?
             .ok_or(Status::internal("No such user"))?;
 
+        let originator = users
+            .find(originator_uuid)
+            .select(User::as_select())
+            .first(&mut connection)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?
+            .ok_or(Status::internal("No such user"))?;
+
+        let room_name = format!(
+            "Private chat between {} and {}",
+            originator.username, interlocutor.username
+        );
         let private_room_uuid = Room::from_room_with_members(
             ClientsideRoom {
-                name: format!("Private chat between {} and ...", interlocutor.username),
+                name: room_name,
                 members: vec![interlocutor.uuid.into(), originator_uuid.into()],
             },
             &mut connection,

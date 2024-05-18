@@ -4,12 +4,11 @@ option go_package = "google.golang.org/bb-hackathon/tcp-chat.git/proto";
 
 import "entities.proto";
 
-message UserUUIDLookupRequest {
-    string username = 1;
-}
-
-message UsernameLookupRequest {
-    UUID uuid = 1;
+message UserLookupRequest {
+    oneof identifier {
+        UUID uuid = 2;
+        string username = 1;
+    }
 }
 
 message RoomCreationRequest {

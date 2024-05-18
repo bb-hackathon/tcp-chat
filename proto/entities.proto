@@ -46,7 +46,7 @@ message UserCredentials {
 //
 // For example, when the client needs to list the members of the room or display
 // the profile of the user you're about to send a message to, it looks up a user
-// in the server's database by using the Chat::LookupUser
+// in the server's database by using the Chat::LookupUser() RPC.
 message User {
     UUID uuid = 1;
     string username = 2;

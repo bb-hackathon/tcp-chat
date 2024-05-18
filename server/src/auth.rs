@@ -123,7 +123,7 @@ impl Interceptor for Authenticator {
 
         match user_with_matching_credentials {
             Some(user) => {
-                tracing::debug!(message = "Authenticated request", username = ?user.username);
+                tracing::trace!(message = "Authenticated request", username = ?user.username);
                 Ok(request)
             }
             None => Err(unauthenticated()),
