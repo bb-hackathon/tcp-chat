@@ -12,11 +12,8 @@ path = "src/main.rs"
 path = "src/lib.rs"
 
 [dependencies]
-async-stream = "0.3.5"
 color-eyre = "0.6.3"
-const_format = "0.2.32"
 diesel = { version = "2.1.6", features = ["postgres", "uuid", "r2d2"] }
-futures = "0.3.30"
 prost = "0.12.6"
 prost-types = "0.12.4"
 rand_chacha = "0.3.1"
@@ -35,4 +32,4 @@ tonic-build = "0.11"
 
 # `cargo-machete` reports this as unused, but it's absolutely used by `tonic` :)
 [package.metadata.cargo-machete]
-ignored = ["prost"]
+ignored = ["prost", "prost-types"]

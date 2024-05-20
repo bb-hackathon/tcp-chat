@@ -10,20 +10,12 @@ path = "src/main.rs"
 
 [dependencies]
 tcp-chat = { path = "../server" }
-async-stream = "0.3.5"
 color-eyre = "0.6.3"
-const_format = "0.2.32"
-futures = "0.3.30"
-prost = "0.12.6"
+prost = "0.12.4"
 prost-types = "0.12.4"
-rand_chacha = "0.3.1"
-rand_core = "0.6.4"
-thiserror = "1.0.61"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1.15"
 tonic = "0.11.0"
-tracing = "0.1.40"
-tracing-subscriber = "0.3.18"
 uuid = { version = "1.8.0", features = ["v4"] }
 promkit = "0.4.2"
 crossterm = "0.27.0"
@@ -34,4 +26,4 @@ tonic-build = "0.11"
 
 # `cargo-machete` reports this as unused, but it's absolutely used by `tonic` :)
 [package.metadata.cargo-machete]
-ignored = ["prost"]
+ignored = ["prost", "prost-types"]
