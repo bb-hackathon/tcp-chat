@@ -22,7 +22,7 @@ prost-types = "0.12.4"
 rand_chacha = "0.3.1"
 rand_core = "0.6.4"
 redis = { version = "0.25.3", features = ["uuid", "tokio-comp", "aio"] }
-thiserror = "1.0.60"
+thiserror = "1.0.61"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
 tokio-stream = "0.1.15"
 tonic = "0.11.0"
