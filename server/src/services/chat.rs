@@ -395,7 +395,8 @@ impl proto::chat_server::Chat for Chat {
                         vec![]
                     });
 
-                if subscriber_rooms.contains(&message_room) {
+                // Check that the user is a member of the room and that he's subscribed to the rooms the message is from.
+                if subscriber_rooms.contains(&message_room) && subscribed_room == message_room {
                     use proto::serverside_room_event::Event;
                     let new_message = Event::NewMessage(msg.into());
                     let event = ServersideRoomEvent {
