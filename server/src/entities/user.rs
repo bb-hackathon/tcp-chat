@@ -2,11 +2,8 @@ use crate::entities::token::AuthToken;
 use crate::proto::{self, AuthPair};
 use diesel::prelude::*;
 use rand_chacha::ChaCha20Rng;
-use std::{str::FromStr, sync::Arc};
-use tokio::sync::Mutex;
+use std::str::FromStr;
 use uuid::Uuid;
-
-pub type Repo = Arc<Mutex<Vec<User>>>;
 
 #[derive(Queryable, Selectable, Insertable, Identifiable, Clone, Debug)]
 #[diesel(table_name = crate::entities::schema::users)]
