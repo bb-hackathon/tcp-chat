@@ -1,22 +1,15 @@
-mod options;
-
-use crate::options::Options;
-use clap::Parser;
-use options::Action;
-use promkit::preset::{password::Password, readline::Readline};
+use color_eyre::owo_colors::OwoColorize;
+use promkit::preset::{listbox::Listbox, password::Password, readline::Readline};
 use std::panic;
+use std::str::FromStr;
 use tcp_chat::auth::AuthenticatedRequest;
 use tcp_chat::proto::chat_client::ChatClient;
 use tcp_chat::proto::registry_client::RegistryClient;
-use tcp_chat::proto::user_lookup_request::Identifier;
-use tcp_chat::proto::{self, ClientsideMessage, RoomWithUserCreationRequest};
-use tcp_chat::proto::{UserCredentials, UserLookupRequest};
+use tcp_chat::proto::serverside_room_event::Event;
+use tcp_chat::proto::{self, AuthPair, ClientsideMessage, ServersideMessage, UserCredentials};
 use tokio_stream::StreamExt;
 use tonic::transport::Channel;
-use tonic::Request;
-use uuid::{uuid, Uuid};
-
-const ROOM_UUID: Uuid = uuid!("b37490a2-4781-44ad-9c22-d25f1a58f228");
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -27,117 +20,138 @@ async fn main() {
         eyre_hook(panic_info);
     }));
 
-    let options = Options::parse();
+    let auth_strategy = Listbox::new(["Login", "Register"])
+        .title("Would you like to log in or register?")
+        .prompt()
+        .unwrap()
+        .run()
+        .unwrap();
+
+    let username = Readline::default()
+        .title("Username:")
+        .prompt()
+        .unwrap()
+        .run()
+        .unwrap();
+
+    let password = Password::default()
+        .title("Password")
+        .prompt()
+        .unwrap()
+        .run()
+        .unwrap();
 
     let mut registry = RegistryClient::connect("http://localhost:9001")
         .await
         .unwrap();
 
-    let mut username_prompt = Readline::default()
-        .title("Enter a username:")
-        .validator(
-            |username| !username.is_empty(),
-            |_| "Username must not be empty".to_string(),
-        )
-        .prompt()
-        .unwrap();
-    let username = username_prompt.run().unwrap();
-
-    let mut password_prompt = Password::default()
-        .title("Enter your password:")
-        .validator(
-            |password| !password.is_empty(),
-            |_| "Password must not be empty".to_string(),
-        )
-        .prompt()
-        .unwrap();
-    let password = password_prompt.run().unwrap();
-    let credentials = UserCredentials { username, password };
-
-    match options.action() {
-        Action::Register => {
-            registry
-                .register_new_user(credentials.clone())
-                .await
-                .unwrap();
-        }
-        action => {
+    match auth_strategy.as_str() {
+        "Login" => {
             let auth_pair = registry
-                .login_as_user(credentials)
+                .login_as_user(UserCredentials { username, password })
                 .await
                 .unwrap()
                 .into_inner();
-            let chat = Channel::from_static("http://localhost:9001")
-                .connect()
+
+            list_rooms(auth_pair).await;
+        }
+
+        "Register" => {
+            registry
+                .register_new_user(UserCredentials { username, password })
                 .await
                 .unwrap();
-            let mut chat = ChatClient::with_interceptor(chat, move |mut req: Request<()>| {
-                req.add_auth_pair(auth_pair.clone()).unwrap();
-                Ok(req)
-            });
+        }
 
-            match action {
-                Action::Login => println!("Successfully authenticated!"),
-                Action::LookupUser => {
-                    let user = chat
-                        .lookup_user(UserLookupRequest {
-                            identifier: Some(Identifier::Username(username_prompt.run().unwrap())),
-                        })
-                        .await
-                        .unwrap()
-                        .into_inner();
-                    println!("{user:?}");
-                }
-                Action::CreatePrivateRoom => {
-                    let interlocutor = chat
-                        .lookup_user(UserLookupRequest {
-                            identifier: Some(Identifier::Username(username_prompt.run().unwrap())),
-                        })
-                        .await
-                        .unwrap()
-                        .into_inner();
-                    let room_uuid = chat
-                        .create_room_with_user(RoomWithUserCreationRequest {
-                            user_uuid: interlocutor.uuid.clone(),
-                        })
-                        .await
-                        .unwrap()
-                        .into_inner();
-                    println!(
-                        "Created private room with {interlocutor:?}, room UUID: {room_uuid:?}"
-                    );
-                }
-                Action::SendMessage => {
-                    let mut message_prompt = Readline::default()
-                        .title("Enter the message:")
-                        .validator(
-                            |username| !username.is_empty(),
-                            |_| "Username must not be empty".to_string(),
-                        )
-                        .prompt()
-                        .unwrap();
-                    chat.send_message(ClientsideMessage {
-                        room_uuid: Some(ROOM_UUID.into()),
-                        text: message_prompt.run().unwrap(),
-                    })
-                    .await
-                    .unwrap();
+        _ => unreachable!(),
+    }
+}
 
-                    println!("Message sent!");
-                }
-                Action::Subscribe => {
-                    let mut message_stream = chat
-                        .subscribe_to_room(proto::Uuid::from(ROOM_UUID))
-                        .await
-                        .unwrap()
-                        .into_inner();
+async fn list_rooms(auth_pair: AuthPair) {
+    let chat = Channel::from_static("https://localhost:9001")
+        .connect()
+        .await
+        .unwrap();
+    let mut chat = ChatClient::with_interceptor(chat, move |mut request: tonic::Request<()>| {
+        request.add_auth_pair(auth_pair.clone()).unwrap();
+        Ok(request)
+    });
 
-                    while let Some(event) = message_stream.next().await {
-                        println!("{event:?}");
-                    }
+    let rooms = chat.list_rooms(()).await.unwrap().into_inner().rooms;
+    let chosen_room = &Listbox::new(&rooms)
+        .title("Which room would you like to focus?")
+        .prompt()
+        .unwrap()
+        .run()
+        .unwrap();
+    let chosen_room = chosen_room
+        .split(' ')
+        .last()
+        .unwrap()
+        .trim_matches(|c| c == '(' || c == ')');
+    let chosen_room = Uuid::from_str(chosen_room).unwrap();
+
+    let mut message_stream = chat
+        .subscribe_to_room(proto::Uuid::from(chosen_room))
+        .await
+        .unwrap()
+        .into_inner();
+
+    let room_action = Listbox::new(["Send new messages", "Listen to messages"])
+        .title("Would you like to send new messages or listen to incoming ones?")
+        .prompt()
+        .unwrap()
+        .run()
+        .unwrap();
+
+    match room_action.as_str() {
+        "Send new messages" => loop {
+            let text = Readline::default()
+                .title("Message text:")
+                .prompt()
+                .unwrap()
+                .run()
+                .unwrap();
+
+            let _ = chat
+                .send_message(ClientsideMessage {
+                    room_uuid: Some(chosen_room.into()),
+                    text,
+                })
+                .await
+                .unwrap();
+
+            println!("{}", "Message sent!".bright_black());
+        },
+
+        "Listen to messages" => {
+            let messages = chat
+                .list_messages(Into::<proto::Uuid>::into(chosen_room))
+                .await
+                .unwrap()
+                .into_inner()
+                .messages;
+
+            for msg in messages.into_iter() {
+                print_message(msg);
+            }
+
+            while let Ok(event) = message_stream.next().await.unwrap() {
+                match event.event.unwrap() {
+                    Event::NewMessage(msg) => print_message(msg),
                 }
-                Action::Register => unreachable!(),
             }
         }
+
+        _ => unreachable!(),
     }
+}
+
+fn print_message(msg: ServersideMessage) {
+    println!(
+        "{} | {}: {}",
+        msg.timestamp.unwrap().blue(),
+        msg.sender_uuid.unwrap().uuid.green(),
+        msg.text
+    );
 }

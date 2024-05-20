@@ -35,14 +35,38 @@ service Registry {
 service Chat {
     // Look up a user account by username or UUID.
     rpc LookupUser (UserLookupRequest) returns (User);
+
+    // Look up a room by UUID.
+    rpc LookupRoom (UUID) returns (ServersideRoom);
+
+    // List all rooms the currently logged in user is a member of.
+    rpc ListRooms (google.protobuf.Empty) returns (RoomList);
+
+    // List all messages in a certain room.
+    rpc ListMessages (UUID) returns (MessageList);
     
-    rpc SubscribeToRoom (UUID) returns (stream ServersideRoomEvent);
+    // Send a new message to a room.
+    //
+    // The sent message will be mirrored to all clients with a running
+    // SubscribeToRoom handle (if it has the same room UUID), including
+    // the sender of the message.
     rpc SendMessage (ClientsideMessage) returns (google.protobuf.Empty);
 
-    rpc SubscribeToUser (google.protobuf.Empty) returns (stream ServersideUserEvent);
+    // Create a new room with however many users.
     rpc CreateRoom (ClientsideRoom) returns (UUID);
-    rpc CreateRoomWithUser (RoomWithUserCreationRequest) returns (UUID);
-    // rpc DeleteRoom (UUID) returns (google.protobuf.Empty);
 
-    // rpc MessageEvents (stream ClientsideMessageEvent) returns (stream ServersideMessageEvent);
+    // Create a new chat (1x1 room) with a user.
+    rpc CreateRoomWithUser (RoomWithUserCreationRequest) returns (UUID);
+
+    // Subscribe to events inside a room.
+    //
+    // This RPC will yield any new messages that are sent to the provided room,
+    // along with special events when another user joins or leaves the room.
+    rpc SubscribeToRoom (UUID) returns (stream ServersideRoomEvent);
+
+    // Subscribe to personal events.
+    //
+    // This RPC will yield event when the currently logged in user gets added
+    // to a room he's not a member of or kicked out of a room.
+    rpc SubscribeToUser (google.protobuf.Empty) returns (stream ServersideUserEvent);
 }

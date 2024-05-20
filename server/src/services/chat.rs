@@ -1,15 +1,17 @@
 use crate::auth::AuthenticatedRequest;
-use crate::entities::{Message, Room, RoomUser, User};
+use crate::entities::{Message, Room, User};
 use crate::proto::user_lookup_request::Identifier;
-use crate::proto::{ClientsideMessage, ClientsideRoom, ServersideRoomEvent, ServersideUserEvent};
+use crate::proto::{ClientsideMessage, ClientsideRoom, MessageList, RoomList};
 use crate::proto::{RoomWithUserCreationRequest, UserLookupRequest};
-use crate::services::acquire_connection_error_status;
+use crate::proto::{ServersideMessage, ServersideRoom, ServersideRoomEvent, ServersideUserEvent};
 use crate::{persistence, proto};
+use diesel::r2d2::{ConnectionManager, PooledConnection};
+use diesel::PgConnection;
+use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Client, RedisResult};
-use std::{env, pin::Pin};
+use std::env;
 use tokio::sync::{broadcast, mpsc};
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::Stream;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -21,7 +23,409 @@ pub struct Chat {
 
     // Message passing channel.
     message_sender: broadcast::Sender<Message>,
-    // message_receiver: broadcast::Receiver<Message>,
+}
+
+#[tonic::async_trait]
+impl proto::chat_server::Chat for Chat {
+    #[tracing::instrument(skip_all)]
+    async fn lookup_user(
+        &self,
+        request: Request<UserLookupRequest>,
+    ) -> Result<Response<proto::User>, Status> {
+        let identifier: Identifier =
+            request
+                .into_inner()
+                .identifier
+                .ok_or(Status::invalid_argument(
+                    "Can't lookup user without an identifier",
+                ))?;
+
+        let mut connection = self.acquire_database_connection().await?;
+
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
+        use diesel::prelude::*;
+
+        let found_user: Option<User> = match identifier.clone() {
+            Identifier::Uuid(proto_uuid) => {
+                let proto_uuid = Uuid::try_from(proto_uuid)
+                    .map_err(|_| Status::invalid_argument("The provided UUID is invalid"))?;
+                users
+                    .filter(uuid.eq::<Uuid>(proto_uuid))
+                    .select(User::as_select())
+                    .first(&mut connection)
+            }
+            Identifier::Username(proto_uname) => users
+                .filter(username.eq(proto_uname))
+                .select(User::as_select())
+                .first(&mut connection),
+        }
+        .optional()
+        .map_err(|err| Status::internal(err.to_string()))?;
+
+        match found_user {
+            Some(user) => {
+                tracing::debug!(message = "Successful user lookup", username = ?user.username, uuid = ?user.uuid);
+                Ok(Response::new(proto::User::from(user.clone())))
+            }
+            None => {
+                tracing::debug!(message = "Unsuccessful user lookup", ?identifier);
+                Err(Status::not_found("No user with such username"))
+            }
+        }
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn lookup_room(
+        &self,
+        request: Request<proto::Uuid>,
+    ) -> Result<Response<ServersideRoom>, Status> {
+        let _originator: Uuid = request
+            .get_originator_uuid()
+            .expect("The authenticator should not let anonymous requests through");
+
+        let requested_room: Uuid = request
+            .into_inner()
+            .try_into()
+            .map_err(|_| Status::invalid_argument("Invalid room UUID"))?;
+
+        let mut db = self.acquire_database_connection().await?;
+
+        use crate::entities::schema::rooms::dsl::*;
+        use diesel::prelude::*;
+
+        let db_room: Room = rooms
+            .find(requested_room)
+            .select(Room::as_select())
+            .first(&mut db)
+            .map_err(|error| {
+                let msg = "Couldn't fetch rooms from database";
+                tracing::error!(message = msg, ?error);
+                Status::internal(msg)
+            })?;
+
+        let members: Vec<proto::Uuid> = db_room
+            .get_members(&mut db)
+            .await
+            .into_iter()
+            .map(|u| u.into())
+            .collect();
+
+        let serverside_room = ServersideRoom {
+            uuid: Some(db_room.uuid.into()),
+            name: db_room.name,
+            members,
+        };
+
+        Ok(Response::new(serverside_room))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn list_rooms(&self, request: Request<()>) -> Result<Response<RoomList>, Status> {
+        let originator = request
+            .get_originator_uuid()
+            .expect("The authenticator should not let anonymous requests through");
+
+        let mut db = self.acquire_database_connection().await?;
+        let mut cache = self.acquire_cache_connection().await?;
+
+        let room_uuids: Vec<Uuid> = cache
+            .lrange(originator, 0, -1)
+            .await
+            .unwrap_or_else(|error| {
+                tracing::error!(message = "Couldn't get membership from cache", ?error);
+                vec![]
+            });
+
+        use crate::entities::schema::rooms::dsl::*;
+        use diesel::prelude::*;
+
+        let db_rooms: Vec<Room> = rooms
+            .filter(uuid.eq_any(room_uuids))
+            .load::<Room>(&mut db)
+            .map_err(|error| {
+                let msg = "Couldn't load rooms from the database";
+                tracing::error!(message = msg, ?error);
+                Status::internal(msg)
+            })?;
+
+        let serverside_rooms_future: Vec<_> = db_rooms
+            .into_iter()
+            .map(|db_room| async move {
+                let mut db = self
+                    .acquire_database_connection()
+                    .await
+                    .expect("Couldn't acquire a database connection");
+
+                let members: Vec<proto::Uuid> = db_room
+                    .get_members(&mut db)
+                    .await
+                    .iter()
+                    .map(|u| proto::Uuid::from(*u))
+                    .collect();
+
+                ServersideRoom {
+                    uuid: Some(db_room.uuid.into()),
+                    name: db_room.name,
+                    members,
+                }
+            })
+            .collect();
+
+        let serverside_rooms = futures::future::join_all(serverside_rooms_future).await;
+
+        Ok(Response::new(RoomList {
+            rooms: serverside_rooms,
+        }))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn list_messages(
+        &self,
+        request: Request<proto::Uuid>,
+    ) -> Result<Response<MessageList>, Status> {
+        let originator_uuid = request
+            .get_originator_uuid()
+            .expect("The authenticator should not let anonymous requests through");
+
+        let requested_room_uuid: Uuid = request
+            .into_inner()
+            .try_into()
+            .map_err(|_| Status::invalid_argument("Invalid room UUID"))?;
+
+        // Ensure the user is a member of the rooms he's fetching messages from.
+        if !self
+            .check_room_membership(&originator_uuid, &requested_room_uuid)
+            .await?
+        {
+            tracing::warn!(
+                message = "User tried to fetch messages from a room he's not a member of",
+                user = ?originator_uuid,
+                room = ?requested_room_uuid
+            );
+            return Err(Status::permission_denied(
+                "You are not a member of this room",
+            ));
+        }
+
+        let mut db = self.acquire_database_connection().await?;
+
+        use crate::entities::schema::messages::dsl::*;
+        use diesel::prelude::*;
+
+        let room_messages: Vec<Message> = messages
+            .filter(room_uuid.eq(requested_room_uuid))
+            .load::<Message>(&mut db)
+            .map_err(|error| {
+                let msg = "Couldn't fetch messages from database";
+                tracing::error!(message = msg, ?error);
+                Status::internal(msg)
+            })?;
+
+        let serverside_messages: Vec<ServersideMessage> =
+            room_messages.into_iter().map(|m| m.into()).collect();
+
+        Ok(Response::new(MessageList {
+            messages: serverside_messages,
+        }))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn send_message(
+        &self,
+        request: Request<ClientsideMessage>,
+    ) -> Result<Response<()>, Status> {
+        let message = Message::try_from(request)?;
+
+        // Ensure the user isn't sending a message to a room he's not a member of.
+        if !self
+            .check_room_membership(&message.sender_uuid, &message.room_uuid)
+            .await?
+        {
+            tracing::warn!(
+                message = "User tried to send a message to a room he's not a member of",
+                user = ?&message.sender_uuid,
+                room = ?&message.room_uuid
+            );
+            return Err(Status::permission_denied(
+                "You're not a member of this room",
+            ));
+        }
+
+        tracing::info!(message = "New message", sender = ?message.sender_uuid, room = ?message.room_uuid);
+
+        // Store the message in the database and mirror it to all receivers.
+        {
+            use crate::entities::schema::messages::dsl::*;
+            use diesel::prelude::*;
+
+            let mut conn = self.acquire_database_connection().await?;
+            let _ = diesel::insert_into(messages)
+                .values(&message)
+                .execute(&mut conn)
+                .map_err(|err| {
+                    tracing::error!(message = "Could not store message!", ?err);
+                    Status::internal("Could not send the message due to an internal error")
+                })?;
+
+            match self.message_sender.send(message) {
+                Ok(recv_count) => tracing::trace!(message = "Broadcasting message", ?recv_count),
+                Err(err) => tracing::error!(message = "Could not broadcast message", ?err),
+            }
+        }
+
+        Ok(Response::new(()))
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn create_room(
+        &self,
+        request: Request<ClientsideRoom>,
+    ) -> Result<Response<proto::Uuid>, Status> {
+        let mut db = self.acquire_database_connection().await?;
+        let mut cache = self.acquire_cache_connection().await?;
+        let room = request.into_inner();
+        let room_uuid = Room::from_room_with_members(room, &mut db, &mut cache).await?;
+
+        Ok(Response::new(room_uuid.into()))
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn create_room_with_user(
+        &self,
+        request: Request<RoomWithUserCreationRequest>,
+    ) -> Result<Response<proto::Uuid>, Status> {
+        let originator_uuid = request
+            .get_originator_uuid()
+            .map_err(|err| Status::internal(err.to_string()))?;
+        let possible_interlocutor_uuid = request
+            .into_inner()
+            .user_uuid
+            .and_then(|u| Uuid::try_from(u).ok())
+            .ok_or(Status::invalid_argument("Invalid interlocutor UUID"))?;
+
+        let mut db = self.acquire_database_connection().await?;
+        let mut cache = self.acquire_cache_connection().await?;
+
+        // Import some traits and methods to interact with the ORM.
+        use crate::entities::schema::users::dsl::*;
+        use diesel::prelude::*;
+
+        let interlocutor = users
+            .find(possible_interlocutor_uuid)
+            .select(User::as_select())
+            .first(&mut db)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?
+            .ok_or(Status::internal("No such user"))?;
+
+        let originator = users
+            .find(originator_uuid)
+            .select(User::as_select())
+            .first(&mut db)
+            .optional()
+            .map_err(|err| Status::internal(err.to_string()))?
+            .ok_or(Status::internal("No such user"))?;
+
+        let room_name = format!(
+            "Private chat between {} and {}",
+            originator.username, interlocutor.username
+        );
+        let private_room_uuid = Room::from_room_with_members(
+            ClientsideRoom {
+                name: room_name,
+                members: vec![interlocutor.uuid.into(), originator_uuid.into()],
+            },
+            &mut db,
+            &mut cache,
+        )
+        .await?;
+
+        Ok(Response::new(private_room_uuid.into()))
+    }
+
+    type SubscribeToRoomStream = ReceiverStream<Result<ServersideRoomEvent, Status>>;
+
+    #[tracing::instrument(skip_all)]
+    async fn subscribe_to_room(
+        &self,
+        request: Request<proto::Uuid>,
+    ) -> Result<Response<Self::SubscribeToRoomStream>, Status> {
+        let subscriber: Uuid = request
+            .get_originator_uuid()
+            .expect("The authenticator should not let anonymous requests through");
+
+        let subscribed_room: Uuid = request.into_inner().try_into().map_err(|error| {
+            let msg = "The room UUID is invalid";
+            tracing::trace!(message = msg, ?error);
+            Status::invalid_argument(msg)
+        })?;
+
+        // Ensure the user is a member of the room he's subscribing to.
+        if !self
+            .check_room_membership(&subscriber, &subscribed_room)
+            .await?
+        {
+            tracing::warn!(
+                message = "User tried to subscribe to a room he's not a member of",
+                ?subscriber,
+                room = ?subscribed_room
+            );
+            return Err(Status::permission_denied(
+                "You are not a member of this room",
+            ));
+        }
+
+        let (grpc_tx, grpc_rx) = mpsc::channel(4);
+        let mut cache_connection = self.acquire_cache_connection().await?;
+        let mut message_receiver = self.message_sender.subscribe();
+
+        tokio::spawn(async move {
+            while let Ok(msg) = message_receiver.recv().await {
+                let message_room = msg.room_uuid;
+                let subscriber_rooms: Vec<Uuid> = cache_connection
+                    .lrange(subscriber, 0, -1)
+                    .await
+                    .unwrap_or_else(|error| {
+                        tracing::error!(
+                            message = "Could not retrieve membership from cache",
+                            ?subscriber,
+                            ?error
+                        );
+                        vec![]
+                    });
+
+                if subscriber_rooms.contains(&message_room) {
+                    use proto::serverside_room_event::Event;
+                    let new_message = Event::NewMessage(msg.into());
+                    let event = ServersideRoomEvent {
+                        room_uuid: Some(subscribed_room.into()),
+                        event: Some(new_message),
+                    };
+
+                    let send_result = grpc_tx.send(Ok(event)).await;
+                    match send_result {
+                        Ok(()) => {}
+                        Err(_) => tracing::warn!(
+                            message = "A message was sent, but nobody is subscribed to the channel"
+                        ),
+                    }
+                }
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(grpc_rx)))
+    }
+
+    type SubscribeToUserStream = ReceiverStream<Result<ServersideUserEvent, Status>>;
+
+    #[tracing::instrument(skip(self))]
+    async fn subscribe_to_user(
+        &self,
+        _request: Request<()>,
+    ) -> Result<Response<Self::SubscribeToUserStream>, Status> {
+        todo!("Implement user subscriptions")
+    }
 }
 
 impl Chat {
@@ -70,271 +474,51 @@ impl Chat {
             }
         }
 
-        let (tx, _) = broadcast::channel::<Message>(16);
+        let (message_sender, _) = broadcast::channel::<Message>(16);
 
         Ok(Self {
             persistence_pool,
             cache_client,
-            message_sender: tx,
-            // message_receiver: rx,
+            message_sender,
         })
     }
-}
 
-type RPCStream<T> = Pin<Box<dyn Stream<Item = Result<T, Status>> + Send + 'static>>;
-
-#[tonic::async_trait]
-impl proto::chat_server::Chat for Chat {
     #[tracing::instrument(skip_all)]
-    async fn lookup_user(
+    async fn acquire_database_connection(
         &self,
-        request: Request<UserLookupRequest>,
-    ) -> Result<Response<proto::User>, Status> {
-        let identifier: Identifier =
-            request
-                .into_inner()
-                .identifier
-                .ok_or(Status::invalid_argument(
-                    "Can't lookup user without an identifier",
-                ))?;
+    ) -> Result<PooledConnection<ConnectionManager<PgConnection>>, Status> {
+        let db_connection = self.persistence_pool.get().map_err(|error| {
+            let msg = "Couldn't acquire a database connection";
+            tracing::error!(message = msg, ?error);
+            Status::internal(msg)
+        })?;
 
-        let mut connection = self
-            .persistence_pool
-            .get()
-            .map_err(acquire_connection_error_status)?;
-
-        // Import some traits and methods to interact with the ORM.
-        use crate::entities::schema::users::dsl::*;
-        use diesel::prelude::*;
-
-        let found_user: Option<User> = match identifier.clone() {
-            Identifier::Uuid(proto_uuid) => {
-                let proto_uuid = Uuid::try_from(proto_uuid)
-                    .map_err(|_| Status::invalid_argument("The provided UUID is invalid"))?;
-                users
-                    .filter(uuid.eq::<Uuid>(proto_uuid))
-                    .select(User::as_select())
-                    .first(&mut connection)
-            }
-            Identifier::Username(proto_uname) => users
-                .filter(username.eq(proto_uname))
-                .select(User::as_select())
-                .first(&mut connection),
-        }
-        .optional()
-        .map_err(|err| Status::internal(err.to_string()))?;
-
-        match found_user {
-            Some(user) => {
-                tracing::debug!(message = "Successful user lookup", username = ?user.username, uuid = ?user.uuid);
-                Ok(Response::new(proto::User::from(user.clone())))
-            }
-            None => {
-                tracing::debug!(message = "Unsuccessful user lookup", ?identifier);
-                Err(Status::not_found("No user with such username"))
-            }
-        }
+        Ok(db_connection)
     }
 
     #[tracing::instrument(skip_all)]
-    async fn send_message(
-        &self,
-        request: Request<ClientsideMessage>,
-    ) -> Result<Response<()>, Status> {
-        let message = Message::try_from(request)?;
-
-        let mut conn = self
-            .persistence_pool
-            .get()
-            .map_err(acquire_connection_error_status)?;
-
-        // Ensure the user isn't sending a message to a room he's not a member of.
-        {
-            use crate::entities::schema::rooms_users::dsl::*;
-            use diesel::prelude::*;
-
-            let _membership: RoomUser = rooms_users
-                .find((message.room_uuid, message.sender_uuid))
-                .select(RoomUser::as_select())
-                .first(&mut conn)
-                .map_err(|_| {
-                    let msg = "User tried to send a message to a room he's not a member of";
-                    tracing::warn!(message = msg, ?message);
-                    Status::permission_denied("You're not a member of this room!")
-                })?;
-        }
-
-        tracing::info!(message = "New message", sender = ?message.sender_uuid, room = ?message.room_uuid);
-
-        // Store the message in the database and mirror it to all receivers.
-        {
-            use crate::entities::schema::messages::dsl::*;
-            use diesel::prelude::*;
-
-            let _ = diesel::insert_into(messages)
-                .values(&message)
-                .execute(&mut conn)
-                .map_err(|err| {
-                    tracing::error!(message = "Could not store message!", ?err);
-                    Status::internal("Could not send the message due to an internal error")
-                })?;
-
-            match self.message_sender.send(message) {
-                Ok(recv_count) => tracing::trace!(message = "Broadcasting message", ?recv_count),
-                Err(err) => tracing::error!(message = "Could not broadcast message", ?err),
-            }
-        }
-
-        Ok(Response::new(()))
-    }
-
-    #[tracing::instrument(skip_all)]
-    async fn create_room(
-        &self,
-        request: Request<ClientsideRoom>,
-    ) -> Result<Response<proto::Uuid>, Status> {
-        let mut db = self
-            .persistence_pool
-            .get()
-            .map_err(acquire_connection_error_status)?;
-        let mut cache = self
+    async fn acquire_cache_connection(&self) -> Result<MultiplexedConnection, Status> {
+        let cache_connection = self
             .cache_client
             .get_multiplexed_async_connection()
             .await
-            .map_err(acquire_connection_error_status)?;
-        let room = request.into_inner();
-        let room_uuid = Room::from_room_with_members(room, &mut db, &mut cache).await?;
-
-        Ok(Response::new(room_uuid.into()))
-    }
-
-    #[tracing::instrument(skip(self))]
-    async fn create_room_with_user(
-        &self,
-        request: Request<RoomWithUserCreationRequest>,
-    ) -> Result<Response<proto::Uuid>, Status> {
-        let originator_uuid = request
-            .get_originator()
-            .map_err(|err| Status::internal(err.to_string()))?;
-        let possible_interlocutor_uuid = request
-            .into_inner()
-            .user_uuid
-            .and_then(|u| Uuid::try_from(u).ok())
-            .ok_or(Status::invalid_argument("Invalid interlocutor UUID"))?;
-
-        let mut db = self
-            .persistence_pool
-            .get()
-            .map_err(acquire_connection_error_status)?;
-
-        let mut cache = self
-            .cache_client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(acquire_connection_error_status)?;
-
-        // Import some traits and methods to interact with the ORM.
-        use crate::entities::schema::users::dsl::*;
-        use diesel::prelude::*;
-
-        let interlocutor = users
-            .find(possible_interlocutor_uuid)
-            .select(User::as_select())
-            .first(&mut db)
-            .optional()
-            .map_err(|err| Status::internal(err.to_string()))?
-            .ok_or(Status::internal("No such user"))?;
-
-        let originator = users
-            .find(originator_uuid)
-            .select(User::as_select())
-            .first(&mut db)
-            .optional()
-            .map_err(|err| Status::internal(err.to_string()))?
-            .ok_or(Status::internal("No such user"))?;
-
-        let room_name = format!(
-            "Private chat between {} and {}",
-            originator.username, interlocutor.username
-        );
-        let private_room_uuid = Room::from_room_with_members(
-            ClientsideRoom {
-                name: room_name,
-                members: vec![interlocutor.uuid.into(), originator_uuid.into()],
-            },
-            &mut db,
-            &mut cache,
-        )
-        .await?;
-
-        Ok(Response::new(private_room_uuid.into()))
-    }
-
-    type SubscribeToRoomStream = ReceiverStream<Result<ServersideRoomEvent, Status>>;
-
-    #[tracing::instrument(skip(self))]
-    async fn subscribe_to_room(
-        &self,
-        request: Request<proto::Uuid>,
-    ) -> Result<Response<Self::SubscribeToRoomStream>, Status> {
-        let subscriber: Uuid = request
-            .get_originator()
-            .expect("The authenticator should not let anonymous requests through");
-
-        let subscribed_room: Uuid = request
-            .into_inner()
-            .try_into()
-            .map_err(|_| Status::invalid_argument("Invalid room UUID"))?;
-
-        let mut cache_connection = self
-            .cache_client
-            .get_multiplexed_async_connection()
-            .await
-            .map_err(|err| {
+            .map_err(|error| {
                 let msg = "Couldn't acquire a cache connection";
-                tracing::error!(message = msg, ?err);
+                tracing::error!(message = msg, ?error);
                 Status::internal(msg)
             })?;
 
-        let subscriber_rooms: Vec<Uuid> = cache_connection.lrange(subscriber, 0, -1).await.unwrap();
-
-        if !subscriber_rooms.contains(&subscribed_room) {
-            return Err(Status::permission_denied(
-                "You are not a member of this room",
-            ));
-        }
-
-        let (tx, rx) = mpsc::channel(4);
-
-        let mut message_rx = self.message_sender.subscribe();
-        tokio::spawn(async move {
-            while let Ok(msg) = message_rx.recv().await {
-                let message_room = msg.room_uuid;
-                let subscriber_rooms: Vec<Uuid> =
-                    cache_connection.lrange(subscriber, 0, -1).await.unwrap();
-
-                if subscriber_rooms.contains(&message_room) {
-                    use proto::serverside_room_event::Event;
-                    let new_message = Event::NewMessage(msg.into());
-                    let event = ServersideRoomEvent {
-                        room_uuid: Some(subscribed_room.into()),
-                        event: Some(new_message),
-                    };
-                    tx.send(Ok(event)).await.unwrap();
-                }
-            }
-        });
-
-        Ok(Response::new(ReceiverStream::new(rx)))
+        Ok(cache_connection)
     }
 
-    type SubscribeToUserStream = RPCStream<ServersideUserEvent>;
+    #[tracing::instrument]
+    async fn check_room_membership(&self, user: &Uuid, room: &Uuid) -> Result<bool, Status> {
+        let mut cache = self.acquire_cache_connection().await?;
+        let allowed_rooms: Vec<Uuid> = cache.lrange(user, 0, -1).await.unwrap_or_else(|error| {
+            tracing::error!(message = "Couldn't get membership from cache", ?error);
+            vec![]
+        });
 
-    #[tracing::instrument(skip(self))]
-    async fn subscribe_to_user(
-        &self,
-        _request: Request<()>,
-    ) -> Result<Response<Self::SubscribeToUserStream>, Status> {
-        unimplemented!()
+        Ok(allowed_rooms.contains(room))
     }
 }

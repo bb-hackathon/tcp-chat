@@ -6,14 +6,14 @@ use std::str::FromStr;
 use tonic::{service::Interceptor, Request, Status};
 use uuid::Uuid;
 
-#[allow(unused, clippy::missing_errors_doc)]
+#[allow(clippy::missing_errors_doc)]
 pub trait AuthenticatedRequest {
     type Error;
 
-    fn get_originator(&self) -> Result<Uuid, Self::Error>;
-    fn get_token(&self) -> Result<AuthToken, Self::Error>;
     fn add_auth_pair(&mut self, auth_pair: AuthPair) -> Result<(), Self::Error>;
     fn get_auth_pair(&self) -> Result<AuthPair, Self::Error>;
+    fn get_originator_uuid(&self) -> Result<Uuid, Self::Error>;
+    fn get_token(&self) -> Result<AuthToken, Self::Error>;
 }
 
 #[derive(thiserror::Error, Debug, Clone, Copy)]
@@ -47,7 +47,7 @@ impl<T> AuthenticatedRequest for Request<T> {
     }
 
     fn get_auth_pair(&self) -> Result<AuthPair, Self::Error> {
-        match (self.get_originator(), self.get_token()) {
+        match (self.get_originator_uuid(), self.get_token()) {
             (Ok(user_uuid), Ok(auth_token)) => Ok(AuthPair {
                 user_uuid: Some(user_uuid.into()),
                 token: Some(auth_token.into()),
@@ -56,7 +56,7 @@ impl<T> AuthenticatedRequest for Request<T> {
         }
     }
 
-    fn get_originator(&self) -> Result<Uuid, Self::Error> {
+    fn get_originator_uuid(&self) -> Result<Uuid, Self::Error> {
         self.metadata()
             .get(Authenticator::USER_UUID_KEY)
             .and_then(|m| m.to_str().ok())
@@ -75,12 +75,12 @@ impl<T> AuthenticatedRequest for Request<T> {
 
 #[derive(Debug, Clone)]
 pub struct Authenticator {
-    connection_pool: ConnectionPool,
+    persistence_pool: ConnectionPool,
 }
 
 impl Authenticator {
-    pub fn new(connection_pool: ConnectionPool) -> Self {
-        Self { connection_pool }
+    pub fn new(persistence_pool: ConnectionPool) -> Self {
+        Self { persistence_pool }
     }
 
     pub const USER_UUID_KEY: &'static str = "user_uuid";
@@ -104,7 +104,7 @@ impl Interceptor for Authenticator {
         let _ = request.metadata_mut().remove(Self::AUTH_TOKEN_KEY);
 
         let mut connection = self
-            .connection_pool
+            .persistence_pool
             .get()
             .map_err(acquire_connection_error_status)?;
 
@@ -146,7 +146,7 @@ mod tests {
     use tonic::Request;
 
     #[test]
-    fn authenticated_request_roundtrip() {
+    fn auth_pair_roundtrip() {
         let mut rng = ChaCha20Rng::seed_from_u64(OsRng.next_u64());
         let user = User::new("user_1".into(), "pass_1".into(), &mut rng);
         let auth_pair = AuthPair {

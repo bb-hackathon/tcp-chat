@@ -19,3 +19,11 @@ message RoomCreationRequest {
 message RoomWithUserCreationRequest {
     UUID user_uuid = 1;
 }
+
+message RoomList {
+    repeated ServersideRoom rooms = 1;
+}
+
+message MessageList {
+    repeated ServersideMessage messages = 1;
+}

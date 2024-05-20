@@ -1,8 +1,10 @@
 use crate::entities::relations::RoomUser;
+use crate::proto::ServersideRoom;
 use crate::{persistence::Connection, proto::ClientsideRoom};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use redis::{aio::MultiplexedConnection, AsyncCommands};
+use std::fmt;
 use uuid::Uuid;
 
 #[derive(Queryable, Identifiable, Selectable, Insertable, Debug, Clone)]
@@ -91,5 +93,36 @@ impl Room {
         tracing::info!(message = "Updated membership cache", room = ?room.uuid);
 
         Ok(room.uuid)
+    }
+
+    pub async fn get_members(
+        &self,
+        db_connection: &mut PooledConnection<ConnectionManager<Connection>>,
+    ) -> Vec<Uuid> {
+        use crate::entities::schema::rooms_users::dsl::*;
+        use diesel::prelude::*;
+
+        let members: Vec<Uuid> = rooms_users
+            .filter(room_uuid.eq(self.uuid))
+            .select(user_uuid)
+            .load(db_connection)
+            .unwrap_or_else(|error| {
+                tracing::error!(message = "Couldn't fetch membership from database", ?error);
+                vec![]
+            });
+
+        members
+    }
+}
+
+impl fmt::Display for ServersideRoom {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{} ({})",
+            self.name,
+            self.uuid.clone().unwrap_or_default().uuid
+        )?;
+        Ok(())
     }
 }

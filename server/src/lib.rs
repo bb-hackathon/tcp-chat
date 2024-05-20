@@ -44,7 +44,7 @@ impl TCPChat {
             .await
             .expect("Could not initialize a chat instance");
         let chat = ChatServer::with_interceptor(chat, interceptor.clone());
-        let registry = Registry::with_connection_pool(persistence_pool.clone());
+        let registry = Registry::with_persistence_pool(persistence_pool.clone());
         let registry = RegistryServer::new(registry);
 
         tracing::info!(message = "Starting server", ?addr);

@@ -9,15 +9,15 @@ use tonic::{Request, Response, Status};
 
 #[derive(Debug)]
 pub struct Registry {
-    connection_pool: ConnectionPool,
+    persistence_pool: ConnectionPool,
     rng: Arc<Mutex<ChaCha20Rng>>,
 }
 
 impl Registry {
-    pub fn with_connection_pool(connection_pool: ConnectionPool) -> Self {
+    pub fn with_persistence_pool(persistence_pool: ConnectionPool) -> Self {
         let rng = ChaCha20Rng::seed_from_u64(OsRng.next_u64());
         Self {
-            connection_pool,
+            persistence_pool,
             rng: Arc::new(Mutex::new(rng)),
         }
     }
@@ -31,7 +31,7 @@ impl proto::registry_server::Registry for Registry {
         request: Request<UserCredentials>,
     ) -> Result<Response<()>, Status> {
         let mut connection = self
-            .connection_pool
+            .persistence_pool
             .get()
             .map_err(|_| Status::internal("Database pool error"))?;
 
@@ -76,7 +76,7 @@ impl proto::registry_server::Registry for Registry {
         request: Request<UserCredentials>,
     ) -> Result<Response<AuthPair>, Status> {
         let mut connection = self
-            .connection_pool
+            .persistence_pool
             .get()
             .map_err(|_| Status::internal("Database pool error"))?;
 
