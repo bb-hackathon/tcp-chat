@@ -1,14 +1,14 @@
 use color_eyre::owo_colors::OwoColorize;
 use promkit::preset::{listbox::Listbox, password::Password, readline::Readline};
-use std::panic;
-use std::str::FromStr;
-use tcp_chat::auth::AuthenticatedRequest;
-use tcp_chat::proto::chat_client::ChatClient;
-use tcp_chat::proto::registry_client::RegistryClient;
-use tcp_chat::proto::serverside_room_event::Event;
-use tcp_chat::proto::{self, AuthPair, ClientsideMessage, ServersideMessage, UserCredentials};
+use std::{panic, str::FromStr};
+use tcp_chat::proto::{chat_client::ChatClient, registry_client::RegistryClient};
+use tcp_chat::proto::{serverside_room_event::Event, user_lookup_request::Identifier};
+use tcp_chat::proto::{AuthPair, ClientsideMessage, ServersideMessage};
+use tcp_chat::proto::{RoomWithUserCreationRequest, UserCredentials, UserLookupRequest};
+use tcp_chat::{auth::AuthenticatedRequest, proto};
 use tokio_stream::StreamExt;
-use tonic::transport::Channel;
+use tonic::service::interceptor::InterceptedService;
+use tonic::{transport::Channel, Request, Status};
 use uuid::Uuid;
 
 #[tokio::main]
@@ -35,7 +35,7 @@ async fn main() {
         .unwrap();
 
     let password = Password::default()
-        .title("Password")
+        .title("Password:")
         .prompt()
         .unwrap()
         .run()
@@ -72,11 +72,59 @@ async fn list_rooms(auth_pair: AuthPair) {
         .connect()
         .await
         .unwrap();
-    let mut chat = ChatClient::with_interceptor(chat, move |mut request: tonic::Request<()>| {
+    let mut chat = ChatClient::with_interceptor(chat, move |mut request: Request<()>| {
         request.add_auth_pair(auth_pair.clone()).unwrap();
         Ok(request)
     });
 
+    let room_strategy = Listbox::new(["Focus existing room", "Create new private room"])
+        .title("What would you like to do?")
+        .prompt()
+        .unwrap()
+        .run()
+        .unwrap();
+
+    match room_strategy.as_str() {
+        "Focus existing room" => existing_room(chat).await,
+
+        "Create new private room" => {
+            let interlocutor = Readline::default()
+                .title("Who would you like to chat with?")
+                .prompt()
+                .unwrap()
+                .run()
+                .unwrap();
+
+            let interlocutor_uuid = chat
+                .lookup_user(UserLookupRequest {
+                    identifier: Some(Identifier::Username(interlocutor.clone())),
+                })
+                .await
+                .unwrap()
+                .into_inner()
+                .uuid
+                .unwrap();
+
+            let _ = chat
+                .create_room_with_user(RoomWithUserCreationRequest {
+                    user_uuid: Some(interlocutor_uuid),
+                })
+                .await
+                .unwrap();
+
+            println!("Created new private room with {}.", interlocutor.purple());
+
+            existing_room(chat).await;
+        }
+        _ => unreachable!(),
+    }
+}
+
+async fn existing_room(
+    mut chat: ChatClient<
+        InterceptedService<Channel, impl Fn(Request<()>) -> Result<Request<()>, Status>>,
+    >,
+) {
     let rooms = chat.list_rooms(()).await.unwrap().into_inner().rooms;
     let chosen_room = &Listbox::new(&rooms)
         .title("Which room would you like to focus?")
