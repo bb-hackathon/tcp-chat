@@ -13,6 +13,7 @@ pub enum Action {
     LookupUser,
     CreatePrivateRoom,
     SendMessage,
+    Subscribe,
 }
 
 impl Options {

@@ -6,11 +6,10 @@ pub mod persistence;
 pub mod services;
 
 use crate::auth::Authenticator;
-use crate::persistence::create_connection_pool;
-use crate::proto::authentication_tester_server::AuthenticationTesterServer;
+use crate::persistence::create_persistence_pool;
 use crate::proto::chat_server::ChatServer;
 use crate::proto::registry_server::RegistryServer;
-use crate::services::{auth_tester::AuthenticationTester, chat::Chat, registry::Registry};
+use crate::services::{chat::Chat, registry::Registry};
 use std::env;
 use tonic::transport::Server;
 use tracing_subscriber::fmt;
@@ -36,34 +35,26 @@ impl TCPChat {
             .parse()
             .expect("Invalid gRPC listen address");
 
-        match create_connection_pool() {
-            // The database is not running or something is wrong with it.
-            Err(error) => {
-                tracing::error!(message = "Could not create a DB connection pool", ?error);
-            }
+        // Set up needed external resources and an authenticator.
+        let persistence_pool = create_persistence_pool();
+        let interceptor = Authenticator::new(persistence_pool.clone());
 
-            // The database if fine, build the service handlers and start the listener.
-            Ok(pool) => {
-                let registry = Registry::with_connection_pool(pool.clone());
-                let auth_interceptor = Authenticator::new(pool.clone());
-                let registry_service = RegistryServer::new(registry);
-                let chat = Chat::new(pool.clone());
-                let chat_service = ChatServer::with_interceptor(chat, auth_interceptor.clone());
-                let auth_tester = AuthenticationTester::new();
-                let auth_tester_service =
-                    AuthenticationTesterServer::with_interceptor(auth_tester, auth_interceptor);
+        // Set up gRPC services.
+        let chat = Chat::new(persistence_pool.clone())
+            .await
+            .expect("Could not initialize a chat instance");
+        let chat = ChatServer::with_interceptor(chat, interceptor.clone());
+        let registry = Registry::with_connection_pool(persistence_pool.clone());
+        let registry = RegistryServer::new(registry);
 
-                tracing::info!(message = "Starting gRPC chat", ?addr);
-                Server::builder()
-                    .trace_fn(|_| tracing::info_span!("tcp_chat"))
-                    .add_service(registry_service)
-                    .add_service(chat_service)
-                    .add_service(auth_tester_service)
-                    .serve(addr)
-                    .await
-                    .expect("The server should've finished successfully");
-            }
-        }
+        tracing::info!(message = "Starting server", ?addr);
+        Server::builder()
+            .trace_fn(|_| tracing::info_span!("server"))
+            .add_service(registry)
+            .add_service(chat)
+            .serve(addr)
+            .await
+            .expect("The server should've finished successfully");
     }
 }
 

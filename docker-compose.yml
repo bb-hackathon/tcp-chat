@@ -29,8 +29,6 @@ services:
         restart: unless-stopped
         env_file:
             - .envrc
-        volumes:
-            - redis-data:/data
         ports:
             - "${REDIS_PORT}:${REDIS_PORT}"
 
@@ -43,6 +41,7 @@ services:
             - .envrc
         environment:
             DATABASE_URL: ${DOCKER_DATABASE_URL}
+            KV_URL: ${DOCKER_KV_URL}
         ports:
             - "${SERVER_PORT}:${SERVER_PORT}"
         depends_on:
@@ -64,5 +63,4 @@ services:
 
 volumes:
     postgresql-data:
-    redis-data:
     pgadmin-data:

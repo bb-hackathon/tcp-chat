@@ -46,17 +46,3 @@ service Chat {
 
     // rpc MessageEvents (stream ClientsideMessageEvent) returns (stream ServersideMessageEvent);
 }
-
-// A stub service that authenticates all requests it receives.
-//
-// In order to successfully call the TestAuthentication RPC, the request has to
-// contain a "user_uuid" and "auth_token" metadata keys, which must contain a
-// valid UUID+AuthToken pair of an existing user.
-//
-// If any of the metadata keys are not present or the contained values do not
-// match any of the users' AuthPair, the request is dropped immediately and
-// a Status::unauthenticated is returned to the caller.
-service AuthenticationTester {
-    // RPC with no payload to test the auth interception.
-    rpc TestAuthentication (google.protobuf.Empty) returns (google.protobuf.Empty);
-}

@@ -9,11 +9,14 @@ use tcp_chat::auth::AuthenticatedRequest;
 use tcp_chat::proto::chat_client::ChatClient;
 use tcp_chat::proto::registry_client::RegistryClient;
 use tcp_chat::proto::user_lookup_request::Identifier;
-use tcp_chat::proto::{ClientsideMessage, RoomWithUserCreationRequest};
+use tcp_chat::proto::{self, ClientsideMessage, RoomWithUserCreationRequest};
 use tcp_chat::proto::{UserCredentials, UserLookupRequest};
+use tokio_stream::StreamExt;
 use tonic::transport::Channel;
 use tonic::Request;
-use uuid::uuid;
+use uuid::{uuid, Uuid};
+
+const ROOM_UUID: Uuid = uuid!("b37490a2-4781-44ad-9c22-d25f1a58f228");
 
 #[tokio::main]
 async fn main() {
@@ -114,13 +117,24 @@ async fn main() {
                         .prompt()
                         .unwrap();
                     chat.send_message(ClientsideMessage {
-                        room_uuid: Some(uuid!("d8a9bf90-8e34-43f4-aa60-3ceb7a0057f6").into()),
+                        room_uuid: Some(ROOM_UUID.into()),
                         text: message_prompt.run().unwrap(),
                     })
                     .await
                     .unwrap();
 
                     println!("Message sent!");
+                }
+                Action::Subscribe => {
+                    let mut message_stream = chat
+                        .subscribe_to_room(proto::Uuid::from(ROOM_UUID))
+                        .await
+                        .unwrap()
+                        .into_inner();
+
+                    while let Some(event) = message_stream.next().await {
+                        println!("{event:?}");
+                    }
                 }
                 Action::Register => unreachable!(),
             }
