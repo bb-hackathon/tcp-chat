@@ -139,12 +139,6 @@ async fn existing_room(
         .trim_matches(|c| c == '(' || c == ')');
     let chosen_room = Uuid::from_str(chosen_room).unwrap();
 
-    let mut message_stream = chat
-        .subscribe_to_room(proto::Uuid::from(chosen_room))
-        .await
-        .unwrap()
-        .into_inner();
-
     let room_action = Listbox::new(["Send new messages", "Listen to messages"])
         .title("Would you like to send new messages or listen to incoming ones?")
         .prompt()
@@ -173,6 +167,7 @@ async fn existing_room(
         },
 
         "Listen to messages" => {
+            // Print older, in-database messages.
             let messages = chat
                 .list_messages(Into::<proto::Uuid>::into(chosen_room))
                 .await
@@ -181,12 +176,24 @@ async fn existing_room(
                 .messages;
 
             for msg in messages.into_iter() {
-                print_message(msg);
+                print_message(&msg);
             }
 
-            while let Ok(event) = message_stream.next().await.unwrap() {
+            // Print live messages.
+            let mut message_stream = chat
+                .subscribe_to_room(proto::Uuid::from(chosen_room))
+                .await
+                .unwrap()
+                .into_inner();
+
+            'message_listener: while let Ok(event) = message_stream.next().await.unwrap() {
                 match event.event.unwrap() {
-                    Event::NewMessage(msg) => print_message(msg),
+                    Event::NewMessage(msg) => {
+                        print_message(&msg);
+                        if msg.text.as_str() == "exit" {
+                            break 'message_listener;
+                        }
+                    }
                 }
             }
         }
@@ -195,11 +202,11 @@ async fn existing_room(
     }
 }
 
-fn print_message(msg: ServersideMessage) {
+fn print_message(msg: &ServersideMessage) {
     println!(
         "{} | {}: {}",
-        msg.timestamp.unwrap().blue(),
-        msg.sender_uuid.unwrap().uuid.green(),
+        msg.timestamp.clone().unwrap().blue(),
+        msg.sender_uuid.clone().unwrap().uuid.green(),
         msg.text
     );
 }

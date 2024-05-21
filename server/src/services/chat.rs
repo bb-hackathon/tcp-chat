@@ -1,17 +1,19 @@
 use crate::auth::AuthenticatedRequest;
+use crate::channel::DisconnectChannel;
 use crate::entities::{Message, Room, User};
 use crate::proto::user_lookup_request::Identifier;
 use crate::proto::{ClientsideMessage, ClientsideRoom, MessageList, RoomList};
 use crate::proto::{RoomWithUserCreationRequest, UserLookupRequest};
 use crate::proto::{ServersideMessage, ServersideRoom, ServersideRoomEvent, ServersideUserEvent};
-use crate::{persistence, proto};
+use crate::{channel, persistence, proto};
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::PgConnection;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Client, RedisResult};
 use std::env;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_stream::wrappers::ReceiverStream;
+use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -22,7 +24,7 @@ pub struct Chat {
     cache_client: redis::Client,
 
     // Message passing channel.
-    message_sender: broadcast::Sender<Message>,
+    message_tx: broadcast::Sender<Message>,
 }
 
 #[tonic::async_trait]
@@ -268,7 +270,7 @@ impl proto::chat_server::Chat for Chat {
                     Status::internal("Could not send the message due to an internal error")
                 })?;
 
-            match self.message_sender.send(message) {
+            match self.message_tx.send(message) {
                 Ok(recv_count) => tracing::trace!(message = "Broadcasting message", ?recv_count),
                 Err(err) => tracing::error!(message = "Could not broadcast message", ?err),
             }
@@ -344,9 +346,9 @@ impl proto::chat_server::Chat for Chat {
         Ok(Response::new(private_room_uuid.into()))
     }
 
-    type SubscribeToRoomStream = ReceiverStream<Result<ServersideRoomEvent, Status>>;
+    type SubscribeToRoomStream = DisconnectChannel<Result<ServersideRoomEvent, Status>>;
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, a = 1)]
     async fn subscribe_to_room(
         &self,
         request: Request<proto::Uuid>,
@@ -376,12 +378,45 @@ impl proto::chat_server::Chat for Chat {
             ));
         }
 
-        let (grpc_tx, grpc_rx) = mpsc::channel(4);
+        // The 'streamer' thread (see below) needs a cache connection.
         let mut cache_connection = self.acquire_cache_connection().await?;
-        let mut message_receiver = self.message_sender.subscribe();
 
+        // NOTE: Read this.
+        //
+        // There are a total of 3 channels involved in this whole streaming thing:
+        // - An internal `broadcast` channel that transfers messages from `SendMessage` RPC calls;
+        // - A `DisconnectChannel`, which holds another 2 channels inside:
+        //   - A `mpsc` Tokio channel, which performs gRPC streaming;
+        //   - A `oneshot` Tokio channel, which fires when the client disconnects.
+
+        // The 'canceller' thread will cancel this token when the client disconnects.
+        let cancellation_token = CancellationToken::new();
+        let token_clone = cancellation_token.clone();
+
+        let (grpc_tx, grpc_rx) = mpsc::channel(4);
+        let (disconnect_tx, disconnect_rx) = oneshot::channel::<()>();
+        let disconnect_channel = channel::DisconnectChannel {
+            signal_sender: Some(disconnect_tx),
+            inner_channel: grpc_rx,
+        };
+
+        let mut message_rx = self.message_tx.subscribe();
+        let receiver_count = self.message_tx.receiver_count();
+        tracing::debug!(message = "New room subscriber", room = ?subscribed_room, total_subscribers = %receiver_count);
+
+        // This is the 'canceller' thread.
+        //
+        // This task will cancel the token when the client disconnects, which will shutdown
+        // the streaming thread (see below) and cause the broadcast::Receiver to drop.
         tokio::spawn(async move {
-            while let Ok(msg) = message_receiver.recv().await {
+            let _ = disconnect_rx.await;
+            tracing::trace!("Client disconnected, cancelling streaming thread");
+            cancellation_token.cancel();
+        });
+
+        // The logic for the streaming thread, extracted into a variable to help rustfmt.
+        let streaming_closure = async move {
+            while let Ok(msg) = message_rx.recv().await {
                 let message_room = msg.room_uuid;
                 let subscriber_rooms: Vec<Uuid> = cache_connection
                     .lrange(subscriber, 0, -1)
@@ -413,9 +448,24 @@ impl proto::chat_server::Chat for Chat {
                     }
                 }
             }
+        };
+
+        // This is the 'streamer' thread.
+        //
+        // This thread will receive all messages sent via the `SendMessage` RPC call, and
+        // mirror them to all subsribers. Without a canceller thread, a cancellation token
+        // and a hacky DisconnectChannel, this thread would never terminate, meaning there
+        // would soon be a thousand of hanging broadcast::Receivers with no real client.
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = token_clone.cancelled() => {
+                    tracing::debug!(message = "Streamer thread cancelled");
+                }
+                _ = streaming_closure => {}
+            }
         });
 
-        Ok(Response::new(ReceiverStream::new(grpc_rx)))
+        Ok(Response::new(disconnect_channel))
     }
 
     type SubscribeToUserStream = ReceiverStream<Result<ServersideUserEvent, Status>>;
@@ -480,7 +530,7 @@ impl Chat {
         Ok(Self {
             persistence_pool,
             cache_client,
-            message_sender,
+            message_tx: message_sender,
         })
     }
 

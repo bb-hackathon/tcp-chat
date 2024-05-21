@@ -1,6 +1,7 @@
 #![deny(clippy::unwrap_used)]
 
 pub mod auth;
+pub mod channel;
 pub mod entities;
 pub mod persistence;
 pub mod services;
