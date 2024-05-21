@@ -6,6 +6,7 @@ use rand_core::{OsRng, RngCore, SeedableRng};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
+use tracing::instrument;
 
 #[derive(Debug)]
 pub struct Registry {
@@ -25,7 +26,7 @@ impl Registry {
 
 #[tonic::async_trait]
 impl proto::registry_server::Registry for Registry {
-    #[tracing::instrument(skip(self, request))]
+    #[instrument(skip_all)]
     async fn register_new_user(
         &self,
         request: Request<UserCredentials>,
@@ -63,14 +64,14 @@ impl proto::registry_server::Registry for Registry {
 
             // A user with a matching username was found, refuse to register.
             Some(_) => {
-                const MESSAGE: &str = "Such user already exists";
-                tracing::warn!(message = MESSAGE, username = ?credentials.username);
-                Err(Status::already_exists(MESSAGE))
+                let msg = "Such user already exists";
+                tracing::warn!(message = msg, username = ?credentials.username);
+                Err(Status::already_exists(msg))
             }
         }
     }
 
-    #[tracing::instrument(skip(self, request))]
+    #[instrument(skip_all)]
     async fn login_as_user(
         &self,
         request: Request<UserCredentials>,
@@ -97,15 +98,15 @@ impl proto::registry_server::Registry for Registry {
         match candidate_user {
             // A an account with matching credentials exist, returns its UUID and token.
             Some(user) => {
-                tracing::debug!(message = "Login successful", username = ?credentials.username);
+                tracing::info!(message = "Successful login", username = ?credentials.username);
                 Ok(Response::new(user.auth_pair()))
             }
 
             // No matching username+password pair was found, reject.
             None => {
-                const MESSAGE: &str = "Invalid username or password";
-                tracing::warn!(message = MESSAGE, username = ?credentials.username);
-                Err(Status::unauthenticated(MESSAGE))
+                let msg = "Invalid username or password";
+                tracing::warn!(message = msg, username = ?credentials.username);
+                Err(Status::unauthenticated(msg))
             }
         }
     }

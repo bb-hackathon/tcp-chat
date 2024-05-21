@@ -20,7 +20,7 @@ message ServersideRoomEvent {
 }
 
 message ServersideUserEvent {
-    UUID room_uuid = 1;
+    UUID user_uuid = 1;
 
     oneof event {
         UUID added_to_room = 2;

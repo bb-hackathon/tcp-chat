@@ -1,6 +1,7 @@
 use crate::auth::AuthenticatedRequest;
 use crate::channel::DisconnectChannel;
-use crate::entities::{Message, Room, User};
+use crate::entities::{Message, Room, RoomUser, User};
+use crate::proto::serverside_user_event::Event;
 use crate::proto::user_lookup_request::Identifier;
 use crate::proto::{ClientsideMessage, ClientsideRoom, MessageList, RoomList};
 use crate::proto::{RoomWithUserCreationRequest, UserLookupRequest};
@@ -12,9 +13,9 @@ use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Client, RedisResult};
 use std::env;
 use tokio::sync::{broadcast, mpsc, oneshot};
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
 use tonic::{Request, Response, Status};
+use tracing::instrument;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -25,11 +26,12 @@ pub struct Chat {
 
     // Message passing channel.
     message_tx: broadcast::Sender<Message>,
+    user_event_tx: broadcast::Sender<ServersideUserEvent>,
 }
 
 #[tonic::async_trait]
 impl proto::chat_server::Chat for Chat {
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn lookup_user(
         &self,
         request: Request<UserLookupRequest>,
@@ -77,7 +79,7 @@ impl proto::chat_server::Chat for Chat {
         }
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn lookup_room(
         &self,
         request: Request<proto::Uuid>,
@@ -122,7 +124,7 @@ impl proto::chat_server::Chat for Chat {
         Ok(Response::new(serverside_room))
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn list_rooms(&self, request: Request<()>) -> Result<Response<RoomList>, Status> {
         let originator = request
             .get_originator_uuid()
@@ -181,7 +183,7 @@ impl proto::chat_server::Chat for Chat {
         }))
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn list_messages(
         &self,
         request: Request<proto::Uuid>,
@@ -232,7 +234,7 @@ impl proto::chat_server::Chat for Chat {
         }))
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn send_message(
         &self,
         request: Request<ClientsideMessage>,
@@ -279,20 +281,18 @@ impl proto::chat_server::Chat for Chat {
         Ok(Response::new(()))
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn create_room(
         &self,
         request: Request<ClientsideRoom>,
     ) -> Result<Response<proto::Uuid>, Status> {
-        let mut db = self.acquire_database_connection().await?;
-        let mut cache = self.acquire_cache_connection().await?;
         let room = request.into_inner();
-        let room_uuid = Room::from_room_with_members(room, &mut db, &mut cache).await?;
+        let room_uuid = self.create_room(room).await?;
 
         Ok(Response::new(room_uuid.into()))
     }
 
-    #[tracing::instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn create_room_with_user(
         &self,
         request: Request<RoomWithUserCreationRequest>,
@@ -300,6 +300,7 @@ impl proto::chat_server::Chat for Chat {
         let originator_uuid = request
             .get_originator_uuid()
             .map_err(|err| Status::internal(err.to_string()))?;
+
         let possible_interlocutor_uuid = request
             .into_inner()
             .user_uuid
@@ -307,7 +308,6 @@ impl proto::chat_server::Chat for Chat {
             .ok_or(Status::invalid_argument("Invalid interlocutor UUID"))?;
 
         let mut db = self.acquire_database_connection().await?;
-        let mut cache = self.acquire_cache_connection().await?;
 
         // Import some traits and methods to interact with the ORM.
         use crate::entities::schema::users::dsl::*;
@@ -333,22 +333,19 @@ impl proto::chat_server::Chat for Chat {
             "Private chat between {} and {}",
             originator.username, interlocutor.username
         );
-        let private_room_uuid = Room::from_room_with_members(
-            ClientsideRoom {
+        let private_room_uuid = self
+            .create_room(ClientsideRoom {
                 name: room_name,
                 members: vec![interlocutor.uuid.into(), originator_uuid.into()],
-            },
-            &mut db,
-            &mut cache,
-        )
-        .await?;
+            })
+            .await?;
 
         Ok(Response::new(private_room_uuid.into()))
     }
 
     type SubscribeToRoomStream = DisconnectChannel<Result<ServersideRoomEvent, Status>>;
 
-    #[tracing::instrument(skip_all, a = 1)]
+    #[instrument(skip_all)]
     async fn subscribe_to_room(
         &self,
         request: Request<proto::Uuid>,
@@ -379,7 +376,7 @@ impl proto::chat_server::Chat for Chat {
         }
 
         // The 'streamer' thread (see below) needs a cache connection.
-        let mut cache_connection = self.acquire_cache_connection().await?;
+        let mut cache = self.acquire_cache_connection().await?;
 
         // NOTE: Read this.
         //
@@ -389,36 +386,21 @@ impl proto::chat_server::Chat for Chat {
         //   - A `mpsc` Tokio channel, which performs gRPC streaming;
         //   - A `oneshot` Tokio channel, which fires when the client disconnects.
 
-        // The 'canceller' thread will cancel this token when the client disconnects.
-        let cancellation_token = CancellationToken::new();
-        let token_clone = cancellation_token.clone();
-
         let (grpc_tx, grpc_rx) = mpsc::channel(4);
-        let (disconnect_tx, disconnect_rx) = oneshot::channel::<()>();
+        let (disconnect_tx, disconnect_rx) = oneshot::channel();
         let disconnect_channel = channel::DisconnectChannel {
-            signal_sender: Some(disconnect_tx),
-            inner_channel: grpc_rx,
+            disconnect_tx: Some(disconnect_tx),
+            grpc_rx,
         };
 
         let mut message_rx = self.message_tx.subscribe();
-        let receiver_count = self.message_tx.receiver_count();
-        tracing::debug!(message = "New room subscriber", room = ?subscribed_room, total_subscribers = %receiver_count);
-
-        // This is the 'canceller' thread.
-        //
-        // This task will cancel the token when the client disconnects, which will shutdown
-        // the streaming thread (see below) and cause the broadcast::Receiver to drop.
-        tokio::spawn(async move {
-            let _ = disconnect_rx.await;
-            tracing::trace!("Client disconnected, cancelling streaming thread");
-            cancellation_token.cancel();
-        });
+        tracing::info!(message = "New room subscriber", room = ?subscribed_room);
 
         // The logic for the streaming thread, extracted into a variable to help rustfmt.
         let streaming_closure = async move {
             while let Ok(msg) = message_rx.recv().await {
                 let message_room = msg.room_uuid;
-                let subscriber_rooms: Vec<Uuid> = cache_connection
+                let subscriber_rooms: Vec<Uuid> = cache
                     .lrange(subscriber, 0, -1)
                     .await
                     .unwrap_or_else(|error| {
@@ -440,15 +422,28 @@ impl proto::chat_server::Chat for Chat {
                     };
 
                     let send_result = grpc_tx.send(Ok(event)).await;
-                    match send_result {
-                        Ok(()) => {}
-                        Err(_) => tracing::warn!(
+                    if send_result.is_err() {
+                        tracing::warn!(
                             message = "A message was sent, but nobody is subscribed to the channel"
-                        ),
+                        )
                     }
                 }
             }
         };
+
+        // The 'canceller' thread will cancel this token when the client disconnects.
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
+
+        // This is the 'canceller' thread.
+        //
+        // This task will cancel the token when the client disconnects, which will shutdown
+        // the streaming thread (see below) and cause the broadcast::Receiver to drop.
+        tokio::spawn(async move {
+            let _ = disconnect_rx.await;
+            tracing::debug!(message = "Client disconnected, stopping message streaming");
+            token.cancel();
+        });
 
         // This is the 'streamer' thread.
         //
@@ -458,9 +453,7 @@ impl proto::chat_server::Chat for Chat {
         // would soon be a thousand of hanging broadcast::Receivers with no real client.
         tokio::spawn(async move {
             tokio::select! {
-                _ = token_clone.cancelled() => {
-                    tracing::debug!(message = "Streamer thread cancelled");
-                }
+                _ = token_clone.cancelled() => {}
                 _ = streaming_closure => {}
             }
         });
@@ -468,18 +461,65 @@ impl proto::chat_server::Chat for Chat {
         Ok(Response::new(disconnect_channel))
     }
 
-    type SubscribeToUserStream = ReceiverStream<Result<ServersideUserEvent, Status>>;
+    type SubscribeToUserStream = DisconnectChannel<Result<ServersideUserEvent, Status>>;
 
-    #[tracing::instrument(skip(self))]
+    #[instrument(skip_all)]
     async fn subscribe_to_user(
         &self,
-        _request: Request<()>,
+        request: Request<()>,
     ) -> Result<Response<Self::SubscribeToUserStream>, Status> {
-        todo!("Implement user subscriptions")
+        let user_uuid: Uuid = request
+            .get_originator_uuid()
+            .expect("The authenticator should not let anonymous requests through");
+
+        let (grpc_tx, grpc_rx) = mpsc::channel(4);
+        let (disconnect_tx, disconnect_rx) = oneshot::channel();
+        let disconnect_channel = DisconnectChannel {
+            disconnect_tx: Some(disconnect_tx),
+            grpc_rx,
+        };
+
+        let mut user_event_rx = self.user_event_tx.subscribe();
+        let streaming_closure = async move {
+            while let Ok(event) = user_event_rx.recv().await {
+                if event
+                    .user_uuid
+                    .clone()
+                    .is_some_and(|event_user_uuid| user_uuid == event_user_uuid)
+                {
+                    let send_result = grpc_tx.send(Ok(event)).await;
+                    if send_result.is_err() {
+                        tracing::trace!(message = "A user event occurred, but nobody is subscribed")
+                    }
+                }
+            }
+        };
+
+        let token = CancellationToken::new();
+        let token_clone = token.clone();
+
+        // Spawn the "canceller" thread.
+        tokio::spawn(async move {
+            let _ = disconnect_rx.await;
+            tracing::debug!(message = "Client disconnected, stopping user event streaming");
+            token.cancel();
+        });
+
+        // Spawn the "streamer" thread.
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = token_clone.cancelled() => {}
+                _ = streaming_closure => {}
+            }
+        });
+
+        Ok(Response::new(disconnect_channel))
     }
 }
 
 impl Chat {
+    const INTERNAL_CHANNEL_CAPACITY: usize = 16;
+
     pub async fn new(persistence_pool: persistence::ConnectionPool) -> RedisResult<Self> {
         let cache_client = Client::open(env::var("KV_URL").expect("Could not read $KV_URL"))?;
         let mut cache = cache_client.get_multiplexed_async_connection().await?;
@@ -519,22 +559,23 @@ impl Chat {
                 .select(room_uuid)
                 .load::<Uuid>(&mut db)
                 .unwrap_or_default();
-
             for room in rooms.iter() {
                 cache.rpush(user, room).await?;
             }
         }
 
-        let (message_sender, _) = broadcast::channel::<Message>(16);
+        let (message_tx, _) = broadcast::channel(Self::INTERNAL_CHANNEL_CAPACITY);
+        let (user_event_tx, _) = broadcast::channel(Self::INTERNAL_CHANNEL_CAPACITY);
 
         Ok(Self {
             persistence_pool,
             cache_client,
-            message_tx: message_sender,
+            message_tx,
+            user_event_tx,
         })
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn acquire_database_connection(
         &self,
     ) -> Result<PooledConnection<ConnectionManager<PgConnection>>, Status> {
@@ -547,7 +588,7 @@ impl Chat {
         Ok(db_connection)
     }
 
-    #[tracing::instrument(skip_all)]
+    #[instrument(skip_all)]
     async fn acquire_cache_connection(&self) -> Result<MultiplexedConnection, Status> {
         let cache_connection = self
             .cache_client
@@ -562,7 +603,7 @@ impl Chat {
         Ok(cache_connection)
     }
 
-    #[tracing::instrument]
+    #[instrument]
     async fn check_room_membership(&self, user: &Uuid, room: &Uuid) -> Result<bool, Status> {
         let mut cache = self.acquire_cache_connection().await?;
         let allowed_rooms: Vec<Uuid> = cache.lrange(user, 0, -1).await.unwrap_or_else(|error| {
@@ -571,5 +612,85 @@ impl Chat {
         });
 
         Ok(allowed_rooms.contains(room))
+    }
+
+    #[instrument(skip_all)]
+    async fn create_room(&self, clientside_room: ClientsideRoom) -> Result<Uuid, Status> {
+        let mut db_connection = self.acquire_database_connection().await?;
+        let mut cache_connection = self.acquire_cache_connection().await?;
+
+        let user_uuids: Vec<Uuid> = clientside_room
+            .members
+            .into_iter()
+            .map(Uuid::try_from)
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                let error = error.to_string();
+                let message = format!("Some member UUIDs could not be converted: {error}");
+                Status::invalid_argument(message)
+            })?;
+
+        let room = Room::new(clientside_room.name);
+        let room_uuid = room.uuid;
+        let members: Vec<RoomUser> = user_uuids
+            .iter()
+            .map(|user_uuid| RoomUser {
+                room_uuid,
+                user_uuid: *user_uuid,
+            })
+            .collect();
+
+        // Store the room and members in the database.
+        {
+            use crate::entities::schema::rooms::dsl::*;
+            use crate::entities::schema::rooms_users::dsl::*;
+            use diesel::{insert_into, RunQueryDsl};
+
+            let _ = insert_into(rooms)
+                .values(&room)
+                .execute(&mut db_connection)
+                .map_err(|error| {
+                    let error = error.to_string();
+                    let message = format!("Could not save the room in the database: {error}");
+                    Status::internal(message)
+                })?;
+
+            let _ = insert_into(rooms_users)
+                .values(&members)
+                .execute(&mut db_connection)
+                .map_err(|error| {
+                    let error = error.to_string();
+                    let message = format!("Could not save the room's members: {error}");
+                    Status::internal(message)
+                })?;
+
+            tracing::info!(message = "Created new room", members = ?user_uuids, uuid = ?room.uuid);
+        }
+
+        // Update the membership cache.
+        for user_uuid in user_uuids.into_iter() {
+            let _: () = cache_connection
+                .rpush(user_uuid, room.uuid)
+                .await
+                .map_err(|error| {
+                    let message = "Could not update membership cache";
+                    tracing::error!(message = message, ?error);
+                    Status::internal(message)
+                })?;
+
+            let event = ServersideUserEvent {
+                user_uuid: Some(user_uuid.into()),
+                event: Some(Event::AddedToRoom(room.uuid.into())),
+            };
+
+            match self.user_event_tx.send(event) {
+                Ok(recv_count) => tracing::trace!(message = "Broadcasting user event", ?recv_count),
+                Err(error) => tracing::error!(message = "Could not broadcast user event", ?error),
+            }
+        }
+
+        tracing::info!(message = "Updated membership cache", room = ?room.uuid);
+
+        Ok(room.uuid)
     }
 }
