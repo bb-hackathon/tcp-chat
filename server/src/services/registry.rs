@@ -41,7 +41,7 @@ impl proto::registry_server::Registry for Registry {
         use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
         use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
 
-        let credentials = request.into_inner();
+        let mut credentials = request.into_inner();
         let duplicate_user = users
             .filter(username.eq(&credentials.username))
             .select(User::as_select())
@@ -52,6 +52,9 @@ impl proto::registry_server::Registry for Registry {
         match duplicate_user {
             // No duplicate usernames found, registering a new account.
             None => {
+                // Hash the password using Blake3.
+                credentials.password = blake3::hash(credentials.password.as_bytes()).to_string();
+
                 let mut rng = self.rng.lock().await;
                 let user = User::new(credentials.username.clone(), credentials.password, &mut rng);
                 let _ = diesel::insert_into(users)
@@ -86,7 +89,11 @@ impl proto::registry_server::Registry for Registry {
         use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
         use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
 
-        let credentials = request.into_inner();
+        let mut credentials = request.into_inner();
+
+        // Hash the password using Blake3.
+        credentials.password = blake3::hash(credentials.password.as_bytes()).to_string();
+
         let candidate_user = users
             .filter(username.eq(&credentials.username))
             .filter(password.eq(&credentials.password))
