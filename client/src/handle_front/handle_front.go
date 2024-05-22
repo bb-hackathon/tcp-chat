@@ -24,9 +24,14 @@ func CORSHandler(next http.Handler) http.Handler {
 type Message struct {
 	Message string `json:"message"`
 }
+
 type UserCreds struct {
 	Login    string `json:"login"`
 	Password string `json:"password"`
+}
+
+type Usernames struct {
+	Usernames []string `json:"usernames"`
 }
 
 func sendMessageHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,11 +79,33 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+func createroomHandler(w http.ResponseWriter, r *http.Request) {
+	var usernames Usernames
+	err := json.NewDecoder(r.Body).Decode(&usernames)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println(usernames.Usernames)
+
+	var usernames2 []string
+
+	for _, value := range usernames.Usernames {
+		usernames2 = append(usernames2, sendmessage.LookUpUser(value))
+	}
+	fmt.Println(usernames2)
+	sendmessage.CreateRoom(usernames2)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", sendMessageHandler)
 	mux.HandleFunc("/register", registerHandler)
 	mux.HandleFunc("/login", loginHandler)
+	mux.HandleFunc("/createroom", createroomHandler)
 	// Добавляем CORSHandler
 	handler := CORSHandler(mux)
 

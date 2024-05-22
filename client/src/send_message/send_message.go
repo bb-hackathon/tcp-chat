@@ -177,7 +177,7 @@ func SubscribeToUser() {
 	}
 }
 
-func CreateRoom(uuid string) {
+func CreateRoom(uuids []string) {
 	UserUUID, AuthToken := getUserAuthData()
 
 	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
@@ -194,11 +194,15 @@ func CreateRoom(uuid string) {
 	))
 
 	roomReq := &proto.ClientsideRoom{
-		Name: "Room111",
-		Members: []*proto.UUID{
-			&proto.UUID{Uuid: UserUUID},
-			&proto.UUID{Uuid: uuid},
-		},
+		Name:    "Room111",
+		Members: []*proto.UUID{},
+	}
+
+	currentUserUUID := &proto.UUID{Uuid: UserUUID}
+	roomReq.Members = append(roomReq.Members, currentUserUUID)
+
+	for _, uuid := range uuids {
+		roomReq.Members = append(roomReq.Members, &proto.UUID{Uuid: uuid})
 	}
 
 	response, err := client.CreateRoom(ctx, roomReq)
@@ -272,7 +276,7 @@ func ListMessages(room string) {
 	}
 }
 
-func LookUpUser(user string) {
+func LookUpUser(user string) string {
 	UserUUID, AuthToken := getUserAuthData()
 
 	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
@@ -304,4 +308,5 @@ func LookUpUser(user string) {
 
 	fmt.Printf("Username: %s\n", lookupUserResponse.Username)
 	fmt.Printf("User ID: %s\n", lookupUserResponse.Uuid)
+	return lookupUserResponse.Uuid.Uuid
 }
