@@ -20,13 +20,13 @@ func main() {
 	client := proto.NewChatClient(conn)
 
 	md := metadata.Pairs(
-		"user_uuid", "d9890202-a129-4044-8736-e7770fcae7f5",
-		"auth_token", "f94ee0212842c6434f019eb42bfcdc63",
+		"user_uuid", "1e99a43a-9111-4a38-8c91-adeba3666729",
+		"auth_token", "970112691aef145c6f35f18e9586864d",
 	)
 
 	ctx := metadata.NewOutgoingContext(context.Background(), md)
 
-	roomUUID := "36537ef0-ee3e-44fa-aaa1-6547e466dd4a"
+	roomUUID := "0cc2800c-21b5-4959-a307-40e8ce6767a8"
 	stream, err := client.SubscribeToRoom(ctx, &proto.UUID{Uuid: roomUUID})
 	if err != nil {
 		log.Fatalf("SubscribeToRoom failed: %v", err)

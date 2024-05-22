@@ -2,6 +2,7 @@ package sendmessage
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 
@@ -9,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 var (
@@ -69,6 +71,8 @@ func Login(username, password string) {
 	}
 
 	response, err := client.LoginAsUser(ctx, userCredentials)
+	fmt.Println(response.UserUuid.Uuid)
+	fmt.Println(response.Token.Token)
 	if err != nil {
 		log.Fatalf("could not login: %v", err)
 	}
@@ -106,5 +110,134 @@ func SendMessage(t string, room string) {
 		log.Fatalf("SendMessage failed: %v", err)
 	} else {
 		log.Printf("Message sent successfully: %s", t)
+	}
+}
+
+func ReceiveMessage(room string) {
+	userUUID, authToken := getUserAuthData()
+
+	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	md := metadata.Pairs(
+		"user_uuid", userUUID,
+		"auth_token", authToken,
+	)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	roomUUID := room
+	stream, err := client.SubscribeToRoom(ctx, &proto.UUID{Uuid: roomUUID})
+	if err != nil {
+		log.Fatalf("SubscribeToRoom failed: %v", err)
+	}
+
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			log.Fatalf("Error receiving event: %v", err)
+		}
+		log.Printf("Received event: %v", event)
+	}
+}
+
+func SubscribeToUser() {
+	UserUUID, AuthToken := getUserAuthData()
+
+	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	md := metadata.Pairs(
+		"user_uuid", UserUUID,
+		"auth_token", AuthToken,
+	)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	stream, err := client.SubscribeToUser(ctx, &emptypb.Empty{})
+	if err != nil {
+		log.Fatalf("SubscribeToUser failed: %v", err)
+	}
+
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			log.Fatalf("Error receiving event: %v", err)
+		}
+
+		log.Printf("Received user event: %v", event)
+	}
+}
+
+func CreateRoom(uuid string) {
+	UserUUID, AuthToken := getUserAuthData()
+
+	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
+		"user_uuid", UserUUID,
+		"auth_token", AuthToken,
+	))
+
+	roomReq := &proto.ClientsideRoom{
+		Name: "Room111",
+		Members: []*proto.UUID{
+			&proto.UUID{Uuid: UserUUID},
+			&proto.UUID{Uuid: uuid},
+		},
+	}
+
+	response, err := client.CreateRoom(ctx, roomReq)
+	fmt.Println(response.Uuid)
+	if err != nil {
+		log.Fatalf("CreateRoom failed: %v", err)
+	} else {
+		log.Println("Room created successfully")
+		fmt.Println(response)
+	}
+}
+
+func ListRooms() {
+	UserUUID, AuthToken := getUserAuthData()
+
+	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	md := metadata.Pairs(
+		"user_uuid", UserUUID,
+		"auth_token", AuthToken,
+	)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	response, err := client.ListRooms(ctx, &emptypb.Empty{})
+	if err != nil {
+		log.Fatalf("Error calling ListRooms: %v", err)
+	}
+
+	log.Println("Rooms:")
+	for _, room := range response.GetRooms() {
+		log.Printf("Room UUID: %s, Room Name: %s", room.GetUuid(), room.GetName())
 	}
 }
