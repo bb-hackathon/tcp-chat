@@ -12,18 +12,21 @@ func CORSHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "POST, GET, OPTIONS, PUT, DELETE")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Access-Control-Allow-Origin")
 		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
 			return
 		}
-
 		next.ServeHTTP(w, r)
 	})
 }
 
 type Message struct {
 	Message string `json:"message"`
+}
+type UserCreds struct {
+	Login    string `json:"login"`
+	Password string `json:"password"`
 }
 
 func sendMessageHandler(w http.ResponseWriter, r *http.Request) {
@@ -41,11 +44,27 @@ func sendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
+func registerHandler(w http.ResponseWriter, r *http.Request) {
+	var msg UserCreds
+	err := json.NewDecoder(r.Body).Decode(&msg)
+	username := msg.Login
+	password := msg.Password
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	fmt.Println(username, password)
+	common.Register(username, password)
+
+	// Ответ клиенту
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
 
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", sendMessageHandler)
-
+	mux.HandleFunc("/register", registerHandler)
 	// Добавляем CORSHandler
 	handler := CORSHandler(mux)
 

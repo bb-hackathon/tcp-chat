@@ -1,4 +1,4 @@
-package main
+package common
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-func main() {
+func Register(username string, password string) {
 	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
@@ -20,8 +20,8 @@ func main() {
 
 	ctx := context.Background()
 	userCredentials := &proto.UserCredentials{
-		Username: "user2",
-		Password: "password",
+		Username: username,
+		Password: password,
 	}
 
 	_, err = client.RegisterNewUser(ctx, userCredentials)
