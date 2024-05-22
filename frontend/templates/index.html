@@ -128,8 +128,8 @@
                     </li>
                 </ul>
                 <div id="send-message-panel">
-                    <input type="email" class="form-control msg-input" id="exampleFormControlInput1" placeholder="Напишите сообщение...">
-                    <button type="button" style="background-color: #8B00FF; border-color: none; margin-left: 20px" class="btn btn-primary send-msg-btn">Отправить</button>
+                    <input type="text" class="form-control msg-input" id="messageInput" placeholder="Напишите сообщение...">
+                    <button type="button" style="background-color: #8B00FF; border-color: none; margin-left: 20px" class="btn btn-primary send-msg-btn" onclick="sendMessage()">Отправить</button>
                 </div>
             </main>
         </div>
@@ -138,6 +138,28 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz" crossorigin="anonymous"></script>
     <script>
+        function sendMessage() {
+            var messageInput = document.getElementById("messageInput");
+            var message = messageInput.value;
+            if (message.trim() !== "") {
+                fetch("http://localhost:8080/send", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({ message: message })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Message sent:", data);
+                    messageInput.value = ""; // Clear the input field
+                })
+                .catch(error => {
+                    console.error("Error sending message:", error);
+                });
+            }
+        }
+
         window.onload = function() {
             var scrollContainer = document.getElementById('chat');
             scrollContainer.scrollTop = scrollContainer.scrollHeight;
