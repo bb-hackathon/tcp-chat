@@ -241,3 +241,35 @@ func ListRooms() {
 		log.Printf("Room UUID: %s, Room Name: %s", room.GetUuid(), room.GetName())
 	}
 }
+
+func ListMessages(room string) {
+	UserUUID, AuthToken := getUserAuthData()
+
+	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	md := metadata.Pairs(
+		"user_uuid", UserUUID,
+		"auth_token", AuthToken,
+	)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	roomUUID := room
+
+	listMessagesRequest := &proto.UUID{Uuid: roomUUID}
+	listMessagesResponse, err := client.ListMessages(ctx, listMessagesRequest)
+	if err != nil {
+		log.Fatalf("Failed to list messages: %v", err)
+	}
+
+	for _, message := range listMessagesResponse.Messages {
+		fmt.Printf("Message ID: %s\n", message.Text)
+		fmt.Println("-----------------------")
+	}
+}
