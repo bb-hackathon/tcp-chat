@@ -23,7 +23,6 @@ impl TCPChat {
         let color_eyre = color_eyre::install().is_ok();
         fmt::Subscriber::builder()
             .with_env_filter("tcp_chat=trace")
-            .without_time()
             .pretty()
             .init();
         tracing::debug!(message = "Tracing setup hook finished", %color_eyre);
