@@ -13,7 +13,7 @@ precommit:
 # Redeploy all services, rebuilding `server` and `sqlrunner`.
 deploy:
     docker compose down
-    docker compose up --detach --build server postgresql pgadmin
+    docker compose up --detach --build server postgresql pgadmin llm
 
 # Redeploy a new version of a container.
 redeploy CONTAINER:

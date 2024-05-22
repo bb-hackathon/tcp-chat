@@ -89,6 +89,7 @@ impl Authenticator {
 
 impl Interceptor for Authenticator {
     fn call(&mut self, mut request: Request<()>) -> Result<Request<()>, Status> {
+        dbg!(&request);
         let auth_pair: AuthPair = request.get_auth_pair().map_err(|_| unauthenticated())?;
         let user_uuid: Uuid = auth_pair
             .user_uuid

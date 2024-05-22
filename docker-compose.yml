@@ -61,6 +61,26 @@ services:
         depends_on:
             - postgresql
 
+    llm:
+        image: ollama/ollama:latest
+        hostname: llm
+        restart: unless-stopped
+        container_name: ollama
+        tty: true
+        ports:
+            - "${LLM_PORT}:${LLM_PORT}"
+        volumes:
+            - ollama:/root/.ollama
+
+    llm-setup:
+        build:
+            context: .
+            dockerfile: llm/Dockerfile
+        restart: unless-stopped
+        env_file:
+            - .envrc
+
 volumes:
     postgresql-data:
     pgadmin-data:
+    ollama:

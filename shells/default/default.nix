@@ -10,10 +10,13 @@ pkgs.mkShell {
     PROTOC = "${pkgs.protobuf}/bin/protoc";
     PROTOC_INCLUDE = "${pkgs.protobuf}/include";
 
+    nativeBuildInputs = with pkgs; [ pkg-config ];
+
     buildInputs = with pkgs; [
         protobuf # Protocol Buffers, Google's data interchange format.
         grpcurl  # Command-line tool for interacting with gRPC servers.
         bloomrpc # GUI Client for gRPC Services (like Postman).
         postgresql
+        openssl.dev
     ];
 }
