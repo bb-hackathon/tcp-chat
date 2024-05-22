@@ -21,14 +21,14 @@ func main() {
 	client := proto.NewChatClient(conn)
 
 	ctx := metadata.NewOutgoingContext(context.Background(), metadata.Pairs(
-		"user_uuid", "d9890202-a129-4044-8736-e7770fcae7f5",
-		"auth_token", "f94ee0212842c6434f019eb42bfcdc63",
+		"user_uuid", "17c4ab93-0b16-4233-9936-9f1c89ab96d7",
+		"auth_token", "70ea0d70360f118b4de4dd7d2b40c543",
 	))
 
 	roomReq := &proto.ClientsideRoom{
-		Name: "Room2",
+		Name: "Room0",
 		Members: []*proto.UUID{
-			&proto.UUID{Uuid: "d9890202-a129-4044-8736-e7770fcae7f5"},
+			&proto.UUID{Uuid: "17c4ab93-0b16-4233-9936-9f1c89ab96d7"},
 		},
 	}
 
