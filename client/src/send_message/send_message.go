@@ -273,3 +273,37 @@ func ListMessages(room string) {
 		fmt.Println("-----------------------")
 	}
 }
+
+func LookUpUser(user string) {
+	UserUUID, AuthToken := getUserAuthData()
+
+	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	md := metadata.Pairs(
+		"user_uuid", UserUUID,
+		"auth_token", AuthToken,
+	)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	userIdentifier := user
+
+	lookupUserRequest := &proto.UserLookupRequest{
+		Identifier: &proto.UserLookupRequest_Username{
+			Username: userIdentifier,
+		},
+	}
+	lookupUserResponse, err := client.LookupUser(ctx, lookupUserRequest)
+	if err != nil {
+		log.Fatalf("Failed to lookup user: %v", err)
+	}
+
+	fmt.Printf("Username: %s\n", lookupUserResponse.Username)
+	fmt.Printf("User ID: %s\n", lookupUserResponse.Uuid)
+}
