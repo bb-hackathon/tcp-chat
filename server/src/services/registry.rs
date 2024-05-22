@@ -38,8 +38,7 @@ impl proto::registry_server::Registry for Registry {
 
         // Import some traits and methods to interact with the ORM.
         use crate::entities::schema::users::dsl::*;
-        use diesel::query_dsl::methods::{FilterDsl, SelectDsl};
-        use diesel::{ExpressionMethods, OptionalExtension, RunQueryDsl, SelectableHelper};
+        use diesel::prelude::*;
 
         let mut credentials = request.into_inner();
         let duplicate_user = users
@@ -52,8 +51,24 @@ impl proto::registry_server::Registry for Registry {
         match duplicate_user {
             // No duplicate usernames found, registering a new account.
             None => {
-                // Hash the password using Blake3.
-                credentials.password = blake3::hash(credentials.password.as_bytes()).to_string();
+                // Hash the password using Blake3 hash function.
+                #[cfg(not(feature = "streebog"))]
+                {
+                    credentials.password =
+                        blake3::hash(credentials.password.as_bytes()).to_string();
+                }
+
+                // Hash the password using GOST 34.11-2012 hash function.
+                //
+                // - Reference:      https://en.wikipedia.org/wiki/Streebog
+                // - Implementation: https://docs.rs/streebog/latest/streebog/index.html
+                #[cfg(feature = "streebog")]
+                {
+                    use streebog::{Digest, Streebog256};
+                    let mut hasher = Streebog256::new();
+                    hasher.update(credentials.password.as_str());
+                    credentials.password = hex::encode(hasher.finalize());
+                }
 
                 let mut rng = self.rng.lock().await;
                 let user = User::new(credentials.username.clone(), credentials.password, &mut rng);
@@ -91,8 +106,23 @@ impl proto::registry_server::Registry for Registry {
 
         let mut credentials = request.into_inner();
 
-        // Hash the password using Blake3.
-        credentials.password = blake3::hash(credentials.password.as_bytes()).to_string();
+        // Hash the password using Blake3 hash function.
+        #[cfg(not(feature = "streebog"))]
+        {
+            credentials.password = blake3::hash(credentials.password.as_bytes()).to_string();
+        }
+
+        // Hash the password using GOST 34.11-2012 hash function.
+        //
+        // - Reference:      https://en.wikipedia.org/wiki/Streebog
+        // - Implementation: https://docs.rs/streebog/latest/streebog/index.html
+        #[cfg(feature = "streebog")]
+        {
+            use streebog::{Digest, Streebog256};
+            let mut hasher = Streebog256::new();
+            hasher.update(credentials.password.as_str());
+            credentials.password = hex::encode(hasher.finalize());
+        }
 
         let candidate_user = users
             .filter(username.eq(&credentials.username))
