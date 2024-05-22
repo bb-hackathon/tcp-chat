@@ -71,8 +71,6 @@ func Login(username, password string) {
 	}
 
 	response, err := client.LoginAsUser(ctx, userCredentials)
-	fmt.Println(response.UserUuid.Uuid)
-	fmt.Println(response.Token.Token)
 	if err != nil {
 		log.Fatalf("could not login: %v", err)
 	}

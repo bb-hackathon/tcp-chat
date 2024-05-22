@@ -13,3 +13,5 @@ target/
 
 # Nix
 /result
+
+.DS_Store
