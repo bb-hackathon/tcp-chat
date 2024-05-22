@@ -26,5 +26,23 @@ function createChat() {
             users.push(input.value.trim());
         }
     });
-    alert("Чат создан с пользователями: " + users.join(', '));
+
+    fetch("http://localhost:8080/createroom", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ 
+                usernames: users
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            alert("Чат создан с пользователями: " + users.join(', '));
+            console.log("Чат создан:", data);
+            window.location.href = "index.html";
+        })        
+        .catch(error => {
+            console.error("Ошибка при создании чата:", error);
+        });
 }
