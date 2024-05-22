@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Создание чата</title>
+    <link rel="stylesheet" href="../css/create_room.css">
+</head>
+<body>
+    <div class="container">
+        <h2>Создание чата</h2>
+        <div id="user-list">
+            <div class="user-input">
+                <input type="text" placeholder="Введите имя пользователя" oninput="showAddButton(this)">
+                <button class="add-button" style="display: none;" onclick="addUserInput(this)">+</button>
+            </div>
+        </div>
+        <button class="create-button" onclick="createChat()">Создать</button>
+    </div>
+    <script src="../scripts/create_room.js"></script>
+</body>
+</html>
