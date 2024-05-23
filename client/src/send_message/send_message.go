@@ -268,7 +268,7 @@ func SubscribeToUser() {
 	}
 }
 
-func CreateRoom(uuids []string) {
+func CreateRoom(uuids []string, room string) {
 	UserUUID, AuthToken := getUserAuthData()
 
 	address := "luna:9001"
@@ -302,7 +302,7 @@ func CreateRoom(uuids []string) {
 	))
 
 	roomReq := &proto.ClientsideRoom{
-		Name:    "Room",
+		Name:    room,
 		Members: []*proto.UUID{},
 	}
 

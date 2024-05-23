@@ -33,6 +33,7 @@ type UserCreds struct {
 
 type Usernames struct {
 	Usernames []string `json:"usernames"`
+	Room      string   `json:"room"`
 }
 
 type Room struct {
@@ -100,7 +101,7 @@ func createroomHandler(w http.ResponseWriter, r *http.Request) {
 		usernames2 = append(usernames2, sendmessage.LookUpUser(value))
 	}
 	fmt.Println(usernames2)
-	sendmessage.CreateRoom(usernames2)
+	sendmessage.CreateRoom(usernames2, usernames.Room)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
@@ -116,7 +117,7 @@ func spitRooms(w http.ResponseWriter, r *http.Request) {
 	for id, name := range info {
 		rooms = append(rooms, Room{ID: id, Name: name})
 	}
-
+	json.NewEncoder(w).Encode(rooms)
 }
 
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
@@ -128,6 +129,7 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	var messages = sendmessage.ListMessages(roomID)
 	json.NewEncoder(w).Encode(messages)
+
 }
 
 func main() {
