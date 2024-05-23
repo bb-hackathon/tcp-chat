@@ -9,6 +9,7 @@ use crate::proto::{ServersideMessage, ServersideRoom, ServersideRoomEvent, Serve
 use crate::{channel, persistence, proto};
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::PgConnection;
+use itertools::Itertools;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Client, RedisResult};
 use std::env;
@@ -178,6 +179,8 @@ impl proto::chat_server::Chat for Chat {
 
         let serverside_rooms = futures::future::join_all(serverside_rooms_future).await;
 
+        tracing::info!(message = "Sending a list of rooms", user = ?originator, count = %serverside_rooms.len());
+
         Ok(Response::new(RoomList {
             rooms: serverside_rooms,
         }))
@@ -229,6 +232,8 @@ impl proto::chat_server::Chat for Chat {
         let serverside_messages: Vec<ServersideMessage> =
             room_messages.into_iter().map(|m| m.into()).collect();
 
+        tracing::info!(message = "Sending a list of messages", user = ?originator_uuid, count = %serverside_messages.len());
+
         Ok(Response::new(MessageList {
             messages: serverside_messages,
         }))
@@ -256,7 +261,7 @@ impl proto::chat_server::Chat for Chat {
             ));
         }
 
-        tracing::info!(message = "New message", sender = ?message.sender_uuid, room = ?message.room_uuid);
+        tracing::info!(message = "Received new message", sender = ?message.sender_uuid, room = ?message.room_uuid);
 
         // Store the message in the database and mirror it to all receivers.
         {
@@ -267,14 +272,20 @@ impl proto::chat_server::Chat for Chat {
             let _ = diesel::insert_into(messages)
                 .values(&message)
                 .execute(&mut conn)
-                .map_err(|err| {
-                    tracing::error!(message = "Could not store message!", ?err);
+                .map_err(|error| {
+                    tracing::error!(message = "Could not store message!", ?error);
                     Status::internal("Could not send the message due to an internal error")
                 })?;
 
             match self.message_tx.send(message) {
-                Ok(recv_count) => tracing::trace!(message = "Broadcasting message", ?recv_count),
-                Err(err) => tracing::error!(message = "Could not broadcast message", ?err),
+                Ok(recv_count) => tracing::trace!(message = "Broadcasting room event", ?recv_count),
+                Err(error) => {
+                    if self.message_tx.receiver_count() > 0 {
+                        tracing::error!(message = "Could not broadcast room event", ?error);
+                    } else {
+                        tracing::trace!(message = "No subscribers for room event");
+                    }
+                }
             }
         }
 
@@ -623,6 +634,7 @@ impl Chat {
             .members
             .into_iter()
             .map(Uuid::try_from)
+            .unique() // Ensure we don't operate on the same user twice!
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| {
                 let error = error.to_string();
@@ -631,11 +643,10 @@ impl Chat {
             })?;
 
         let room = Room::new(clientside_room.name);
-        let room_uuid = room.uuid;
         let members: Vec<RoomUser> = user_uuids
             .iter()
             .map(|user_uuid| RoomUser {
-                room_uuid,
+                room_uuid: room.uuid,
                 user_uuid: *user_uuid,
             })
             .collect();
@@ -650,8 +661,8 @@ impl Chat {
                 .values(&room)
                 .execute(&mut db_connection)
                 .map_err(|error| {
-                    let error = error.to_string();
-                    let message = format!("Could not save the room in the database: {error}");
+                    let message = "Could not save the room in the database";
+                    tracing::error!(message = message, ?error);
                     Status::internal(message)
                 })?;
 
@@ -659,8 +670,8 @@ impl Chat {
                 .values(&members)
                 .execute(&mut db_connection)
                 .map_err(|error| {
-                    let error = error.to_string();
-                    let message = format!("Could not save the room's members: {error}");
+                    let message = "Could not save the room's members in the database";
+                    tracing::error!(message = message, ?error);
                     Status::internal(message)
                 })?;
 
@@ -685,7 +696,13 @@ impl Chat {
 
             match self.user_event_tx.send(event) {
                 Ok(recv_count) => tracing::trace!(message = "Broadcasting user event", ?recv_count),
-                Err(error) => tracing::error!(message = "Could not broadcast user event", ?error),
+                Err(error) => {
+                    if self.user_event_tx.receiver_count() > 0 {
+                        tracing::error!(message = "Could not broadcast user event", ?error);
+                    } else {
+                        tracing::trace!(message = "No subscribers for user event");
+                    }
+                }
             }
         }
 

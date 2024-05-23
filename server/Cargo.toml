@@ -17,6 +17,7 @@ color-eyre = "0.6.3"
 diesel = { version = "2.1.6", features = ["postgres", "uuid", "r2d2"] }
 futures = "0.3.30"
 hex = { version = "0.4.3", optional = true }
+itertools = "0.13.0"
 prost = "0.12.6"
 prost-types = "0.12.4"
 rand_chacha = "0.3.1"
