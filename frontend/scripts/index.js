@@ -76,8 +76,14 @@ async function updateGroups(){
                     const chatli = document.createElement('li')
                     chatli.classList.add('you')
                     const message = document.createElement('div')
+                    const author = document.createElement('div')
+                    author.classList.add('entete')
+                    const author_name = document.createElement('h2')
+                    author.appendChild(author_name)
+                    author_name.innerHTML += element[1]
                     message.classList.add('message')
-                    message.innerHTML += element
+                    message.innerHTML += element[0]
+                    chatli.appendChild(author)
                     chatli.appendChild(message)
                     chat.appendChild(chatli)
                 });
