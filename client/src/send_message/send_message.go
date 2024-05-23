@@ -422,7 +422,7 @@ func ListMessages(room string) [][]string {
 	for _, message := range listMessagesResponse.Messages {
 		fmt.Printf("Message ID: %s\n", message.Text)
 		fmt.Println("-----------------------")
-		res = append(res, []string{message.Text, LookUpUser1(message.Uuid)})
+		res = append(res, []string{message.Text, LookUpUser1(message.SenderUuid)})
 	}
 	return res
 }
@@ -528,5 +528,5 @@ func LookUpUser1(user *proto.UUID) string {
 
 	fmt.Printf("Username: %s\n", lookupUserResponse.Username)
 	fmt.Printf("User ID: %s\n", lookupUserResponse.Uuid)
-	return lookupUserResponse.Uuid.Uuid
+	return lookupUserResponse.Username
 }
