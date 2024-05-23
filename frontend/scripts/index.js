@@ -97,21 +97,27 @@ async function updateGroups(){
 
 async function updateMessages(){
     const response = await fetch(`http://localhost:8080/spitmessages?room_id=${active_room}`);
-    const chatli = document.createElement('li')
-    chatli.classList.add('you')
-    const message = document.createElement('div')
-    const author = document.createElement('div')
-    author.classList.add('entete')
-    const author_name = document.createElement('h2')
-    author.appendChild(author_name)
-    author_name.innerHTML += element[1]
-    message.classList.add('message')
-    message.innerHTML += element[0]
-    chatli.appendChild(author)
-    chatli.appendChild(message)
-    chat.appendChild(chatli)
+    console.log(response)
+    const response2 = await response.json()
+    const chat = document.getElementById('chat')
+    chat.replaceChildren()
+    response2.forEach(element => {
+        const chatli = document.createElement('li')
+        chatli.classList.add('you')
+        const message = document.createElement('div')
+        const author = document.createElement('div')
+        author.classList.add('entete')
+        const author_name = document.createElement('h2')
+        author.appendChild(author_name)
+        author_name.innerHTML += element[1]
+        message.classList.add('message')
+        message.innerHTML += element[0]
+        chatli.appendChild(author)
+        chatli.appendChild(message)
+        chat.appendChild(chatli)
+    
+    })
 }
-
 function subscribeToRoom() {
     if (eventSource) {
         eventSource.close();
