@@ -32,7 +32,7 @@ function createChat() {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({room: roomNameInput, usernames: users})
+            body: JSON.stringify({room: roomNameInput.value, usernames: users})
         })
         .then(data => {
             alert("Чат создан с пользователями: " + users.join(', '));

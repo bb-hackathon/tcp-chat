@@ -87,13 +87,25 @@ aside input {
 aside input::placeholder {
 	color:#fff;
 }
-aside ul {
+#chat-list {
 	padding-left:0;
 	margin:0;
 	list-style-type:none;
-	overflow-y:scroll;
 	height: 690px;
-    overflow: hidden;
+	overflow-y: scroll;
+	overflow-x: hidden;
+}
+#chat-list::-webkit-scrollbar {
+    width:8px;
+}
+#chat-list::-webkit-scrollbar-track{
+    background: #2E3440;
+    border-radius: none;
+}
+#chat-list::-webkit-scrollbar-thumb {
+    background-color: #7851A9;
+    border-radius: 8px;
+    border: none;
 }
 aside li {
 	padding:10px 0;
