@@ -120,6 +120,20 @@ func spitRooms(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(rooms)
 }
 
+func streamMessages(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("room_id")
+	if roomID == "" {
+		http.Error(w, "room_id параметр отсутствует", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	for {
+		var messages = sendmessage.ReceiveMessage(roomID)
+		fmt.Println(messages)
+		json.NewEncoder(w).Encode(messages)
+	}
+}
+
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 	roomID := r.URL.Query().Get("room_id")
 	if roomID == "" {
@@ -140,6 +154,7 @@ func main() {
 	mux.HandleFunc("/createroom", createroomHandler)
 	mux.HandleFunc("/spitroom", spitRooms)
 	mux.HandleFunc("/spitmessages", handleGetMessages)
+	mux.HandleFunc("/streammessages", streamMessages)
 	handler := CORSHandler(mux)
 
 	fmt.Println("Server started at :8080")
