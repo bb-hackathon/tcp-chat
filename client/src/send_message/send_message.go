@@ -113,6 +113,8 @@ func Login(username, password string) {
 		log.Fatalf("could not login: %v", err)
 	}
 
+	fmt.Println(response.UserUuid)
+
 	setUserAuthData(response.UserUuid.Uuid, response.Token.Token)
 
 	log.Printf("Logged in successfully")
@@ -300,7 +302,7 @@ func CreateRoom(uuids []string) {
 	))
 
 	roomReq := &proto.ClientsideRoom{
-		Name:    "Room111",
+		Name:    "Room",
 		Members: []*proto.UUID{},
 	}
 
@@ -360,7 +362,7 @@ func ListRooms() map[string]string {
 	if err != nil {
 		log.Fatalf("Error calling ListRooms: %v", err)
 	}
-	var result map[string]string
+	var result = map[string]string{}
 	log.Println("Rooms:")
 	for _, room := range response.GetRooms() {
 		log.Printf("Room UUID: %s, Room Name: %s", room.GetUuid(), room.GetName())

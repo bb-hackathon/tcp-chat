@@ -2,11 +2,12 @@ package main
 
 import (
 	sendmessage "bb-hackathon/tcp-chat.git/src/send_message"
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
 )
 
 func CORSHandler(next http.Handler) http.Handler {
@@ -34,6 +35,11 @@ type UserCreds struct {
 
 type Usernames struct {
 	Usernames []string `json:"usernames"`
+}
+
+type Room struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func sendMessageHandler(w http.ResponseWriter, r *http.Request) {
@@ -107,12 +113,32 @@ func spitRooms(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 
-	for {
-		fmt.Fprintf(w, "data: New message\n\n") // Send a new message
-		w.(http.Flusher).Flush()
-		time.Sleep(1 * time.Second) // Wait for 1 second before sending the next message
+	info := sendmessage.ListRooms()
+	var rooms []Room
+	for id, name := range info {
+		rooms = append(rooms, Room{ID: id, Name: name})
 	}
 
+	jsonData, err := json.Marshal(rooms)
+	if err != nil {
+		fmt.Printf("Error occurred during marshaling. Err: %v\n", err)
+		return
+	}
+
+	resp, err := http.Post("/spitroom", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		fmt.Printf("Error occurred during sending request. Err: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Error occurred during reading response. Err: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Response: %s\n", body)
 }
 
 func main() {
@@ -121,10 +147,11 @@ func main() {
 	mux.HandleFunc("/register", registerHandler)
 	mux.HandleFunc("/login", loginHandler)
 	mux.HandleFunc("/createroom", createroomHandler)
-	// Добавляем CORSHandler
-	mux.HandleFunc("/streamroom", spitRooms)
+	mux.HandleFunc("/spitroom", spitRooms)
 	handler := CORSHandler(mux)
 
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
+	// sendmessage.Login("обезьяна", "обезьяна")
+	// sendmessage.ListRooms()
 }
