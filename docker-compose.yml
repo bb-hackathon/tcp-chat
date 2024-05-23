@@ -63,7 +63,7 @@ services:
 
     llm:
         image: ollama/ollama:latest
-        hostname: llm
+        hostname: ${LLM_HOST}
         restart: unless-stopped
         tty: true
         ports:

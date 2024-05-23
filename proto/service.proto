@@ -69,4 +69,7 @@ service Chat {
     // This RPC will yield event when the currently logged in user gets added
     // to a room he's not a member of or kicked out of a room.
     rpc SubscribeToUser (google.protobuf.Empty) returns (stream ServersideUserEvent);
+
+    // Send the room's messages to an LLM for analysis.
+    rpc AnalyzeRoom (UUID) returns (RoomAnalysisResponse);
 }

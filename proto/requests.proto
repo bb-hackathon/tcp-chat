@@ -27,3 +27,7 @@ message RoomList {
 message MessageList {
     repeated ServersideMessage messages = 1;
 }
+
+message RoomAnalysisResponse {
+    string response = 1;
+}

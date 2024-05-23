@@ -10,8 +10,11 @@ use crate::{channel, persistence, proto};
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use diesel::PgConnection;
 use itertools::Itertools;
+use ollama_rs::generation::completion::request::GenerationRequest;
+use ollama_rs::Ollama;
 use redis::aio::MultiplexedConnection;
 use redis::{AsyncCommands, Client, RedisResult};
+use std::collections::HashMap;
 use std::env;
 use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
@@ -525,6 +528,125 @@ impl proto::chat_server::Chat for Chat {
         });
 
         Ok(Response::new(disconnect_channel))
+    }
+
+    #[instrument(skip_all, fields(user_uuid, room_uuid))]
+    async fn analyze_room(
+        &self,
+        request: Request<proto::Uuid>,
+    ) -> Result<Response<proto::RoomAnalysisResponse>, Status> {
+        let req_originator: Uuid = request
+            .get_originator_uuid()
+            .expect("The authenticator should not let anonymous requests through");
+        tracing::Span::current().record("user_uuid", req_originator.to_string());
+
+        let req_room_uuid: Uuid = request
+            .into_inner()
+            .try_into()
+            .map_err(|_| Status::invalid_argument("Invalid room UUID"))?;
+        tracing::Span::current().record("room_uuid", req_room_uuid.to_string());
+
+        if !self
+            .check_room_membership(&req_originator, &req_room_uuid)
+            .await?
+        {
+            tracing::warn!(message = "User tried to LLM-analyze a room he's not a member of");
+            return Err(Status::permission_denied(
+                "You're not a member of this room",
+            ));
+        }
+
+        tracing::trace!(message = "Collecting messages for an LLM analysis");
+
+        let mut db = self.acquire_database_connection().await?;
+
+        let messages: Vec<Message> = {
+            use crate::entities::schema::messages::dsl::*;
+            use diesel::prelude::*;
+
+            messages
+                .filter(room_uuid.eq(room_uuid))
+                .select(Message::as_select())
+                .load::<Message>(&mut db)
+                .map_err(|error| {
+                    let message = "Couldn't load messages from the database";
+                    tracing::error!(message = message, ?error);
+                    Status::internal(message)
+                })?
+        };
+
+        let usernames: HashMap<Uuid, String> = messages
+            .iter()
+            .map(|message| message.sender_uuid)
+            .unique()
+            .map(|user_uuid| {
+                use crate::entities::schema::users::dsl::*;
+                use diesel::prelude::*;
+
+                (
+                    user_uuid,
+                    users
+                        .find(user_uuid)
+                        .select(username)
+                        .first(&mut db)
+                        .expect("Foreign key can't point to a non-existing primary key"),
+                )
+            })
+            .collect();
+
+        let formatted_messages: Vec<String> = messages
+            .into_iter()
+            .map(|message| {
+                let username = usernames
+                    .get(&message.sender_uuid)
+                    .cloned()
+                    .unwrap_or_default();
+                format!("\n{username}: {}", message.text)
+            })
+            .collect();
+
+        // Connect to the running LLM.
+        let expect_message = "$LLM_HOST and $LLM_PORT should point to an LLM instance!";
+        let host = format!("http://{}", env::var("LLM_HOST").expect(expect_message));
+        let port = env::var("LLM_PORT")
+            .expect(expect_message)
+            .parse::<u16>()
+            .expect(expect_message);
+        let llm = Ollama::new(host, port);
+
+        tracing::trace!(message = "Connected to LLM, forming a prompt");
+
+        let model = "llama3".to_string();
+        let mut prompt = r#"
+            Hey. Here are a bunch of messages from a chat room, along with the user's names.
+            I want you to analyze the messages and figure out what topics were discussed, as
+            well as look for pattterns in the messages and provide insignt into the users'
+            mood and intentions. Provide additional information about the same things the users
+            were talking about. Your response will be used as a mean of improving the users'
+            experience, and also be a part of a real-time behavioral analysis. Stay concise,
+            go straight to the point, no introductions. Here are the messages:
+        "#
+        .to_string();
+
+        for message in formatted_messages.iter() {
+            prompt.push_str(message);
+        }
+
+        tracing::trace!(message = "Awaiting LLM response...");
+
+        let response = llm
+            .generate(GenerationRequest::new(model, prompt))
+            .await
+            .map_err(|error| {
+                let message = "Local LLM returned an error";
+                tracing::error!(message = message, ?error);
+                Status::internal(message)
+            })?
+            .response;
+
+        tracing::info!(message = "LLM analysis complete");
+
+        Ok(Response::new(proto::RoomAnalysisResponse { response }))
     }
 }
 

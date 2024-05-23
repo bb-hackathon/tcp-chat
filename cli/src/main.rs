@@ -13,7 +13,7 @@ use tonic::{transport::Channel, Request, Status};
 use uuid::Uuid;
 
 const CERT: &str = include_str!("../../tls/ca.pem");
-const URL: &str = "https://192.168.122.92:9001";
+const URL: &str = "https://localhost:9001";
 
 #[tokio::main]
 async fn main() {
@@ -135,6 +135,7 @@ async fn list_rooms(auth_pair: AuthPair) {
 
             existing_room(chat).await;
         }
+
         _ => unreachable!(),
     }
 }
@@ -158,8 +159,8 @@ async fn existing_room(
         .trim_matches(|c| c == '(' || c == ')');
     let chosen_room = Uuid::from_str(chosen_room).unwrap();
 
-    let room_action = Listbox::new(["Send new messages", "Listen to messages"])
-        .title("Would you like to send new messages or listen to incoming ones?")
+    let room_action = Listbox::new(["Send new messages", "Listen to messages", "Send to an LLM"])
+        .title("Would you like to send new messages, listen to incoming ones or ask an LLM?")
         .prompt()
         .unwrap()
         .run()
@@ -215,6 +216,18 @@ async fn existing_room(
                     }
                 }
             }
+        }
+
+        "Send to an LLM" => {
+            println!("Prompting the LLM...");
+            let llm_response = chat
+                .analyze_room(proto::Uuid::from(chosen_room))
+                .await
+                .unwrap()
+                .into_inner()
+                .response;
+
+            println!("LLM response: {llm_response}");
         }
 
         _ => unreachable!(),
