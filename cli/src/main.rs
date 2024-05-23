@@ -13,6 +13,7 @@ use tonic::{transport::Channel, Request, Status};
 use uuid::Uuid;
 
 const CERT: &str = include_str!("../../tls/ca.pem");
+const URL: &str = "https://192.168.122.92:9001";
 
 #[tokio::main]
 async fn main() {
@@ -44,7 +45,7 @@ async fn main() {
         .run()
         .unwrap();
 
-    let channel = Channel::from_static("https://localhost:9001")
+    let channel = Channel::from_static(URL)
         .tls_config(
             ClientTlsConfig::new()
                 .ca_certificate(Certificate::from_pem(CERT))
@@ -80,7 +81,7 @@ async fn main() {
 }
 
 async fn list_rooms(auth_pair: AuthPair) {
-    let chat = Channel::from_static("https://localhost:9001")
+    let chat = Channel::from_static(URL)
         .tls_config(
             ClientTlsConfig::new()
                 .ca_certificate(Certificate::from_pem(CERT))
