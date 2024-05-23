@@ -101,6 +101,20 @@ func createroomHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
+
+func spitRooms(w http.ResponseWriter, r *http.Request){
+	w.Header().Set("Content-Type", "text/event-stream")
+    w.Header().Set("Cache-Control", "no-cache")
+    w.Header().Set("Connection", "keep-alive")
+
+    for {
+        fmt.Fprintf(w, "data: New message\n\n") // Send a new message
+        w.(http.Flusher).Flush()
+        time.Sleep(1 * time.Second) // Wait for 1 second before sending the next message
+    }
+
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", sendMessageHandler)
@@ -108,6 +122,7 @@ func main() {
 	mux.HandleFunc("/login", loginHandler)
 	mux.HandleFunc("/createroom", createroomHandler)
 	// Добавляем CORSHandler
+	mux.HandleFunc("/streamroom", spitRooms)
 	handler := CORSHandler(mux)
 
 	fmt.Println("Server started at :8080")
