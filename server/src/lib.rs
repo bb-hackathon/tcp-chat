@@ -12,7 +12,7 @@ use crate::proto::chat_server::ChatServer;
 use crate::proto::registry_server::RegistryServer;
 use crate::services::{chat::Chat, registry::Registry};
 use std::env;
-use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
+use tonic::transport::{Identity, Server, ServerTlsConfig};
 use tracing_subscriber::fmt;
 
 const CERT: &str = include_str!("../../tls/server.pem");
