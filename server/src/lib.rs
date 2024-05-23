@@ -55,7 +55,7 @@ impl TCPChat {
         tracing::info!(message = "Starting server", ?addr);
         Server::builder()
             .tls_config(ServerTlsConfig::new().identity(identity))
-            .unwrap()
+            .expect("The TLS key or certificate is invalid!")
             .trace_fn(|_| tracing::info_span!("server"))
             .add_service(registry)
             .add_service(chat)

@@ -35,7 +35,7 @@ uuid = { version = "1.8.0", features = ["v4"] }
 tonic-build = "0.11"
 
 [features]
-# default = ["streebog"]
+default = ["streebog"]
 streebog = ["dep:streebog", "dep:hex"]
 
 # `cargo-machete` reports this as unused, but it's absolutely used by `tonic` :)
