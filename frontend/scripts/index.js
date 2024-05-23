@@ -2,7 +2,7 @@ const createChat = document.getElementById('create_room');
 createChat.addEventListener('click', () => {
     window.location.href = "create_room.html";
 });
-
+var active_room = '';
 function sendMessage() {
     var messageInput = document.getElementById("messageInput");
     var message = messageInput.value;
@@ -12,7 +12,7 @@ function sendMessage() {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({ message: message })
+            body: JSON.stringify({ message: message, UUID: active_room})
         })
         .then(response => response.json())
         .then(data => {
@@ -30,7 +30,9 @@ window.onload = function() {
     scrollContainer.scrollTop = scrollContainer.scrollHeight;
 };
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {await updateGroups()})
+
+async function updateGroups(){
     async function fetchChatList() {
         try {
             const response = await fetch('http://localhost:8080/spitroom');
@@ -61,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
             div.appendChild(p);
             div.appendChild(divSeparator);
             div.addEventListener('click', async() =>  {
+                active_room = li.dataset.chatId;
                 const response = await fetch(`http://localhost:8080/spitmessages?room_id=${li.dataset.chatId}`);
                 console.log(response)
                 const response2 = await response.json()
@@ -81,5 +84,26 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    fetchChatList();
-});
+    await fetchChatList();
+};
+
+async function updateMessages(){
+    const response = await fetch(`http://localhost:8080/spitmessages?room_id=${active_room}`);
+    console.log(response)
+    const response2 = await response.json()
+    const chat = document.getElementById('chat')
+    chat.replaceChildren()
+    response2.forEach(element => {
+        const chatli = document.createElement('li')
+        chatli.classList.add('you')
+        const message = document.createElement('div')
+        message.classList.add('message')
+        message.innerHTML += element
+        chatli.appendChild(message)
+        chat.appendChild(chatli)
+    });
+}
+
+setTimeout(async () => {
+    await updateMessages()
+}, 3000);
