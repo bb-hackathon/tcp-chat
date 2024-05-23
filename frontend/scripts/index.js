@@ -66,10 +66,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 response.forEach(element => {
                     const chatli = chat.createElement('li')
                     chatli.classList.add('you')
-                    const author = chat.createElement('div')
-                    author.classList.add('entete')
-                    
-                    chatli.appendChild('')
+                    const message = chat.createElement('div')
+                    message.classList.add('message')
+                    message.innerHTML += element
+                    chatli.appendChild(message)
+                    chat.appendChild(chatli)
                 });
             }); 
             li.appendChild(div);
