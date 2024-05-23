@@ -64,6 +64,8 @@ async function updateGroups(){
             div.appendChild(divSeparator);
             div.addEventListener('click', async() =>  {
                 active_room = li.dataset.chatId;
+                var chat_name = document.getElementById("room-name")
+                chat_name.textContent = chat.name;
                 const response = await fetch(`http://localhost:8080/spitmessages?room_id=${li.dataset.chatId}`);
                 console.log(response)
                 const response2 = await response.json()
@@ -104,6 +106,6 @@ async function updateMessages(){
     });
 }
 
-setTimeout(async () => {
+setInterval(async () => {
     await updateGroups()
 }, 3000);
