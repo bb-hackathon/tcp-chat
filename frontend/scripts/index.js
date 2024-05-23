@@ -141,6 +141,13 @@ function subscribeToRoom() {
     };
 }
 
+document.getElementById("messageInput").addEventListener("keypress", function(event) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        sendMessage();
+    }
+});
+
 setInterval(async () => {
     await updateGroups()
 }, 3000);
