@@ -32,8 +32,8 @@ type UserCreds struct {
 }
 
 type Usernames struct {
-	Usernames []string `json:"usernames"`
 	Room      string   `json:"room"`
+	Usernames []string `json:"usernames"`
 }
 
 type Room struct {
@@ -89,18 +89,18 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 func createroomHandler(w http.ResponseWriter, r *http.Request) {
 	var usernames Usernames
 	err := json.NewDecoder(r.Body).Decode(&usernames)
+	fmt.Println(usernames)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println(usernames.Usernames)
+	fmt.Println(usernames.Room)
 
 	var usernames2 []string
 
 	for _, value := range usernames.Usernames {
 		usernames2 = append(usernames2, sendmessage.LookUpUser(value))
 	}
-	fmt.Println(usernames2)
 	sendmessage.CreateRoom(usernames2, usernames.Room)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -144,6 +144,8 @@ func main() {
 
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
-	// sendmessage.Login("обезьяна", "обезьяна")
+	//sendmessage.Login("обезьяна", "обезьяна")
 	// sendmessage.ListRooms()
+	// sendmessage.SendMessage("Бобр1", "2e07b578-f550-426d-a204-9e7082665d2b")
+	// sendmessage.SendMessage("Бобр2", "2e07b578-f550-426d-a204-9e7082665d2b")
 }
