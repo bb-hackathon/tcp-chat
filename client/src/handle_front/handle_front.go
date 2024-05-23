@@ -132,18 +132,6 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func handleGetMessages(w http.ResponseWriter, r *http.Request) {
-	roomID := r.URL.Query().Get("room_id")
-	if roomID == "" {
-		http.Error(w, "room_id параметр отсутствует", http.StatusBadRequest)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	var messages = sendmessage.ListMessages(roomID)
-	json.NewEncoder(w).Encode(messages)
-
-}
-
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/send", sendMessageHandler)
@@ -156,6 +144,8 @@ func main() {
 
 	fmt.Println("Server started at :8080")
 	log.Fatal(http.ListenAndServe(":8080", handler))
-	// sendmessage.Login("обезьяна", "обезьяна")
+	//sendmessage.Login("обезьяна", "обезьяна")
 	// sendmessage.ListRooms()
+	// sendmessage.SendMessage("Бобр1", "2e07b578-f550-426d-a204-9e7082665d2b")
+	// sendmessage.SendMessage("Бобр2", "2e07b578-f550-426d-a204-9e7082665d2b")
 }

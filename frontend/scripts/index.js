@@ -60,14 +60,19 @@ document.addEventListener("DOMContentLoaded", () => {
 
             div.appendChild(p);
             div.appendChild(divSeparator);
-            div.addEventListener('click', async () =>  {
-                const response = await fetch(`https://localhost:8080/spitmessages?room=${li.dataset.chatId}`);
+            div.addEventListener('click', async() =>  {
+                const response = await fetch(`http://localhost:8080/spitmessages?room_id=${li.dataset.chatId}`);
+                console.log(response)
+                const response2 = await response.json()
                 const chat = document.getElementById('chat')
                 chat.replaceChildren()
-                response.forEach(element => {
-                    const chatli = chat.createElement('li')
+<<<<<<< HEAD
+=======
+                response2.forEach(element => {
+                    const chatli = document.createElement('li')
+>>>>>>> 4ffb999 (feat(frontend): Implement message list)
                     chatli.classList.add('you')
-                    const message = chat.createElement('div')
+                    const message = document.createElement('div')
                     message.classList.add('message')
                     message.innerHTML += element
                     chatli.appendChild(message)
