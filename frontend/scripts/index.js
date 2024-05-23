@@ -143,5 +143,8 @@ function subscribeToRoom() {
 
 setInterval(async () => {
     await updateGroups()
-    await updateMessages()
 }, 3000);
+
+setInterval(async () => {
+    await updateMessages()
+}, 750)
