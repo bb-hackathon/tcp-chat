@@ -63,6 +63,7 @@ document.addEventListener("DOMContentLoaded", () => {
             div.addEventListener('click', async () =>  {
                 const response = await fetch(`https://localhost:8080/spitmessages?room=${li.dataset.chatId}`);
                 const chat = document.getElementById('chat')
+                chat.replaceChildren()
                 response.forEach(element => {
                     const chatli = chat.createElement('li')
                     chatli.classList.add('you')
