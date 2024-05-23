@@ -372,7 +372,7 @@ func ListRooms() map[string]string {
 	return result
 }
 
-func ListMessages(room string) {
+func ListMessages(room string) []string {
 	UserUUID, AuthToken := getUserAuthData()
 
 	address := "luna:9001"
@@ -414,11 +414,13 @@ func ListMessages(room string) {
 	if err != nil {
 		log.Fatalf("Failed to list messages: %v", err)
 	}
-
+	var res []string
 	for _, message := range listMessagesResponse.Messages {
 		fmt.Printf("Message ID: %s\n", message.Text)
 		fmt.Println("-----------------------")
+		res = append(res, message.Text)
 	}
+	return res
 }
 
 func LookUpUser(user string) string {

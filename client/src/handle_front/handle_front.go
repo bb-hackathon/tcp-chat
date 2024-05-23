@@ -2,10 +2,8 @@ package main
 
 import (
 	sendmessage "bb-hackathon/tcp-chat.git/src/send_message"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -119,26 +117,17 @@ func spitRooms(w http.ResponseWriter, r *http.Request) {
 		rooms = append(rooms, Room{ID: id, Name: name})
 	}
 
-	jsonData, err := json.Marshal(rooms)
-	if err != nil {
-		fmt.Printf("Error occurred during marshaling. Err: %v\n", err)
+}
+
+func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("room_id")
+	if roomID == "" {
+		http.Error(w, "room_id параметр отсутствует", http.StatusBadRequest)
 		return
 	}
-
-	resp, err := http.Post("/spitroom", "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		fmt.Printf("Error occurred during sending request. Err: %v\n", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Error occurred during reading response. Err: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Response: %s\n", body)
+	w.Header().Set("Content-Type", "application/json")
+	var messages = sendmessage.ListMessages(roomID)
+	json.NewEncoder(w).Encode(messages)
 }
 
 func main() {
@@ -148,6 +137,7 @@ func main() {
 	mux.HandleFunc("/login", loginHandler)
 	mux.HandleFunc("/createroom", createroomHandler)
 	mux.HandleFunc("/spitroom", spitRooms)
+	mux.HandleFunc("/spitmessages", handleGetMessages)
 	handler := CORSHandler(mux)
 
 	fmt.Println("Server started at :8080")
