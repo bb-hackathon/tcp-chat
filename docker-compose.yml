@@ -65,12 +65,11 @@ services:
         image: ollama/ollama:latest
         hostname: llm
         restart: unless-stopped
-        container_name: ollama
         tty: true
         ports:
             - "${LLM_PORT}:${LLM_PORT}"
         volumes:
-            - ollama:/root/.ollama
+            - llm:/root/.ollama
 
     llm-setup:
         build:
@@ -83,4 +82,4 @@ services:
 volumes:
     postgresql-data:
     pgadmin-data:
-    ollama:
+    llm:
