@@ -12,8 +12,11 @@ use crate::proto::chat_server::ChatServer;
 use crate::proto::registry_server::RegistryServer;
 use crate::services::{chat::Chat, registry::Registry};
 use std::env;
-use tonic::transport::Server;
+use tonic::transport::{Certificate, Identity, Server, ServerTlsConfig};
 use tracing_subscriber::fmt;
+
+const CERT: &str = include_str!("../../tls/server.pem");
+const KEY: &str = include_str!("../../tls/server.key");
 
 #[derive(Debug, Default)]
 pub struct TCPChat {}
@@ -47,8 +50,12 @@ impl TCPChat {
         let registry = Registry::with_persistence_pool(persistence_pool.clone());
         let registry = RegistryServer::new(registry);
 
+        let identity = Identity::from_pem(CERT, KEY);
+
         tracing::info!(message = "Starting server", ?addr);
         Server::builder()
+            .tls_config(ServerTlsConfig::new().identity(identity))
+            .unwrap()
             .trace_fn(|_| tracing::info_span!("server"))
             .add_service(registry)
             .add_service(chat)

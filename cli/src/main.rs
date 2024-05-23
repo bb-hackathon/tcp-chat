@@ -8,8 +8,11 @@ use tcp_chat::proto::{RoomWithUserCreationRequest, UserCredentials, UserLookupRe
 use tcp_chat::{auth::AuthenticatedRequest, proto};
 use tokio_stream::StreamExt;
 use tonic::service::interceptor::InterceptedService;
+use tonic::transport::{Certificate, ClientTlsConfig};
 use tonic::{transport::Channel, Request, Status};
 use uuid::Uuid;
+
+const CERT: &str = include_str!("../../tls/ca.pem");
 
 #[tokio::main]
 async fn main() {
@@ -41,9 +44,18 @@ async fn main() {
         .run()
         .unwrap();
 
-    let mut registry = RegistryClient::connect("http://localhost:9001")
+    let channel = Channel::from_static("https://localhost:9001")
+        .tls_config(
+            ClientTlsConfig::new()
+                .ca_certificate(Certificate::from_pem(CERT))
+                .domain_name("example.com"),
+        )
+        .unwrap()
+        .connect()
         .await
         .unwrap();
+
+    let mut registry = RegistryClient::new(channel);
 
     match auth_strategy.as_str() {
         "Login" => {
@@ -69,6 +81,12 @@ async fn main() {
 
 async fn list_rooms(auth_pair: AuthPair) {
     let chat = Channel::from_static("https://localhost:9001")
+        .tls_config(
+            ClientTlsConfig::new()
+                .ca_certificate(Certificate::from_pem(CERT))
+                .domain_name("example.com"),
+        )
+        .unwrap()
         .connect()
         .await
         .unwrap();
