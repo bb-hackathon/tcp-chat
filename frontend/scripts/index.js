@@ -105,5 +105,5 @@ async function updateMessages(){
 }
 
 setTimeout(async () => {
-    await updateMessages()
+    await updateGroups()
 }, 3000);
