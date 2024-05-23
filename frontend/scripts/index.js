@@ -33,7 +33,7 @@ window.onload = function() {
 document.addEventListener("DOMContentLoaded", () => {
     async function fetchChatList() {
         try {
-            const response = await fetch('https://example.com/api/chat-list');
+            const response = await fetch('https://localhost:8080/spitroom');
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }
@@ -60,6 +60,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             div.appendChild(p);
             div.appendChild(divSeparator);
+            div.addEventListener('click', async () =>  {
+                const response = await fetch('https://localhost:8080/get_messages?room=${li.dataset.chatId}');
+            }); 
             li.appendChild(div);
             chatListElement.appendChild(li);
         });
