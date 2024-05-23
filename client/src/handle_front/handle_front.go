@@ -23,6 +23,7 @@ func CORSHandler(next http.Handler) http.Handler {
 
 type Message struct {
 	Message string `json:"message"`
+	UUID    string `json:"uuid"`
 }
 
 type UserCreds struct {
@@ -37,12 +38,11 @@ type Usernames struct {
 func sendMessageHandler(w http.ResponseWriter, r *http.Request) {
 	var text Message
 	err := json.NewDecoder(r.Body).Decode(&text)
-	t := text.Message
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	sendmessage.SendMessage(t, "8299ace8-e565-497a-868a-e48fde731fef")
+	sendmessage.SendMessage(text.Message, text.UUID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
@@ -58,6 +58,7 @@ func registerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Println(username, password)
 	sendmessage.Register(username, password)
+	sendmessage.Login(username, password)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})

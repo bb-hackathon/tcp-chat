@@ -2,13 +2,17 @@ package sendmessage
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 
 	proto "bb-hackathon/tcp-chat.git/proto"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
@@ -33,7 +37,24 @@ func getUserAuthData() (string, string) {
 }
 
 func Register(username string, password string) {
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -56,7 +77,24 @@ func Register(username string, password string) {
 }
 
 func Login(username, password string) {
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -83,7 +121,24 @@ func Login(username, password string) {
 func SendMessage(t string, room string) {
 	userUUID, authToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -114,7 +169,24 @@ func SendMessage(t string, room string) {
 func ReceiveMessage(room string) {
 	userUUID, authToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -147,7 +219,24 @@ func ReceiveMessage(room string) {
 func SubscribeToUser() {
 	UserUUID, AuthToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -180,7 +269,24 @@ func SubscribeToUser() {
 func CreateRoom(uuids []string) {
 	UserUUID, AuthToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -218,7 +324,24 @@ func CreateRoom(uuids []string) {
 func ListRooms() {
 	UserUUID, AuthToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -247,7 +370,24 @@ func ListRooms() {
 func ListMessages(room string) {
 	UserUUID, AuthToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
@@ -279,7 +419,24 @@ func ListMessages(room string) {
 func LookUpUser(user string) string {
 	UserUUID, AuthToken := getUserAuthData()
 
-	conn, err := grpc.Dial("luna:9001", grpc.WithInsecure())
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
