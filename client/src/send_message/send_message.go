@@ -321,7 +321,7 @@ func CreateRoom(uuids []string) {
 	}
 }
 
-func ListRooms() {
+func ListRooms() map[string]string {
 	UserUUID, AuthToken := getUserAuthData()
 
 	address := "luna:9001"
@@ -360,15 +360,13 @@ func ListRooms() {
 	if err != nil {
 		log.Fatalf("Error calling ListRooms: %v", err)
 	}
-	var result map[string] string 
+	var result map[string]string
 	log.Println("Rooms:")
 	for _, room := range response.GetRooms() {
 		log.Printf("Room UUID: %s, Room Name: %s", room.GetUuid(), room.GetName())
 		result[room.Uuid.Uuid] = room.Name
 	}
-	
-	
-	
+
 	return result
 }
 

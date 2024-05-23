@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 )
 
 func CORSHandler(next http.Handler) http.Handler {
@@ -101,17 +102,16 @@ func createroomHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
 }
 
-
-func spitRooms(w http.ResponseWriter, r *http.Request){
+func spitRooms(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
-    w.Header().Set("Cache-Control", "no-cache")
-    w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
 
-    for {
-        fmt.Fprintf(w, "data: New message\n\n") // Send a new message
-        w.(http.Flusher).Flush()
-        time.Sleep(1 * time.Second) // Wait for 1 second before sending the next message
-    }
+	for {
+		fmt.Fprintf(w, "data: New message\n\n") // Send a new message
+		w.(http.Flusher).Flush()
+		time.Sleep(1 * time.Second) // Wait for 1 second before sending the next message
+	}
 
 }
 
