@@ -61,7 +61,7 @@ document.addEventListener("DOMContentLoaded", () => {
             div.appendChild(p);
             div.appendChild(divSeparator);
             div.addEventListener('click', async () =>  {
-                const response = await fetch(`https://localhost:8080/get_messages?room=${li.dataset.chatId}`);
+                const response = await fetch(`https://localhost:8080/spitmessages?room=${li.dataset.chatId}`);
                 const chat = document.getElementById('chat')
                 response.forEach(element => {
                     const chatli = chat.createElement('li')
