@@ -422,7 +422,7 @@ func ListMessages(room string) [][]string {
 	for _, message := range listMessagesResponse.Messages {
 		fmt.Printf("Message ID: %s\n", message.Text)
 		fmt.Println("-----------------------")
-		res = append(res, []string{message.Text, LookUpUser(message.Uuid.String())})
+		res = append(res, []string{message.Text, LookUpUser1(message.Uuid)})
 	}
 	return res
 }
@@ -467,6 +467,58 @@ func LookUpUser(user string) string {
 	lookupUserRequest := &proto.UserLookupRequest{
 		Identifier: &proto.UserLookupRequest_Username{
 			Username: userIdentifier,
+		},
+	}
+	lookupUserResponse, err := client.LookupUser(ctx, lookupUserRequest)
+	if err != nil {
+		log.Fatalf("Failed to lookup user: %v", err)
+	}
+
+	fmt.Printf("Username: %s\n", lookupUserResponse.Username)
+	fmt.Printf("User ID: %s\n", lookupUserResponse.Uuid)
+	return lookupUserResponse.Uuid.Uuid
+}
+
+func LookUpUser1(user *proto.UUID) string {
+	UserUUID, AuthToken := getUserAuthData()
+
+	address := "luna:9001"
+	caCert := "./ca.pem"
+
+	b, err := os.ReadFile(caCert)
+	if err != nil {
+		log.Fatalf("error reading %s: %v", caCert, err)
+	}
+	pool := x509.NewCertPool()
+	pool.AppendCertsFromPEM(b)
+
+	tc := credentials.NewTLS(&tls.Config{
+		RootCAs:            pool,
+		InsecureSkipVerify: true,
+	})
+
+	conn, err := grpc.Dial(address,
+		grpc.WithTransportCredentials(tc),
+	)
+	if err != nil {
+		log.Fatalf("Failed to connect: %v", err)
+	}
+	defer conn.Close()
+
+	client := proto.NewChatClient(conn)
+
+	md := metadata.Pairs(
+		"user_uuid", UserUUID,
+		"auth_token", AuthToken,
+	)
+
+	ctx := metadata.NewOutgoingContext(context.Background(), md)
+
+	userIdentifier := user
+
+	lookupUserRequest := &proto.UserLookupRequest{
+		Identifier: &proto.UserLookupRequest_Uuid{
+			Uuid: userIdentifier,
 		},
 	}
 	lookupUserResponse, err := client.LookupUser(ctx, lookupUserRequest)
