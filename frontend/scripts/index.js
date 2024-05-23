@@ -65,6 +65,7 @@ async function updateGroups(){
             div.addEventListener('click', async() =>  {
                 active_room = li.dataset.chatId;
                 var chat_name = document.getElementById("room-name")
+                subscribeToRoom(active_room)
                 chat_name.textContent = chat.name;
                 const response = await fetch(`http://localhost:8080/spitmessages?room_id=${li.dataset.chatId}`);
                 console.log(response)
@@ -104,6 +105,26 @@ async function updateMessages(){
         chatli.appendChild(message)
         chat.appendChild(chatli)
     });
+}
+
+function subscribeToRoom() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource(`http://localhost:8080/streammessages?room_id=${roomID}`);
+    eventSource.onmessage = function(event) {
+        const message = JSON.parse(event.data);
+        const messagesList = document.getElementById('messages');
+        const li = document.createElement('li');
+        li.textContent = `${message.ID}: ${message.Content}`;
+        messagesList.appendChild(li);
+    };
+
+    eventSource.onerror = function(event) {
+        console.error("Ошибка соединения с сервером:", event);
+        eventSource.close();
+    };
 }
 
 setInterval(async () => {
