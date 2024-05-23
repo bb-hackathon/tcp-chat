@@ -3,7 +3,6 @@ createChat.addEventListener('click', () => {
     window.location.href = "create_room.html";
 });
 var active_room = '';
-var g_chat_name = '';
 function sendMessage() {
     var messageInput = document.getElementById("messageInput");
     var message = messageInput.value;
@@ -58,7 +57,6 @@ async function updateGroups(){
             const div = document.createElement('div');
             const p = document.createElement('p');
             p.textContent = chat.name;
-            g_chat_name = chat.name;
             const divSeparator = document.createElement('div');
             divSeparator.classList.add('chat-name-sep');
 
@@ -68,7 +66,7 @@ async function updateGroups(){
                 active_room = li.dataset.chatId;
                 var chat_name = document.getElementById("room-name")
                 subscribeToRoom(active_room)
-                chat_name.textContent = g_chat_name;
+                chat_name.textContent = p.textContent;
                 const response = await fetch(`http://localhost:8080/spitmessages?room_id=${li.dataset.chatId}`);
                 console.log(response)
                 const response2 = await response.json()
