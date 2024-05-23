@@ -114,7 +114,7 @@ function subscribeToRoom() {
         eventSource.close();
     }
 
-    eventSource = new EventSource(`http://localhost:8080/streammessages?room_id=${roomID}`);
+    eventSource = new EventSource(`http://localhost:8080/streammessages?room_id=${active_room}`);
     eventSource.onmessage = function(event) {
         const message = JSON.parse(event.data);
         const chatli = document.createElement('li')
