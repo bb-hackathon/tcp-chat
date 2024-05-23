@@ -32,8 +32,8 @@ type UserCreds struct {
 }
 
 type Usernames struct {
-	Usernames []string `json:"usernames"`
 	Room      string   `json:"room"`
+	Usernames []string `json:"usernames"`
 }
 
 type Room struct {
@@ -89,18 +89,18 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 func createroomHandler(w http.ResponseWriter, r *http.Request) {
 	var usernames Usernames
 	err := json.NewDecoder(r.Body).Decode(&usernames)
+	fmt.Println(usernames)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	fmt.Println(usernames.Usernames)
+	fmt.Println(usernames.Room)
 
 	var usernames2 []string
 
 	for _, value := range usernames.Usernames {
 		usernames2 = append(usernames2, sendmessage.LookUpUser(value))
 	}
-	fmt.Println(usernames2)
 	sendmessage.CreateRoom(usernames2, usernames.Room)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -118,6 +118,18 @@ func spitRooms(w http.ResponseWriter, r *http.Request) {
 		rooms = append(rooms, Room{ID: id, Name: name})
 	}
 	json.NewEncoder(w).Encode(rooms)
+}
+
+func handleGetMessages(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("room_id")
+	if roomID == "" {
+		http.Error(w, "room_id параметр отсутствует", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	var messages = sendmessage.ListMessages(roomID)
+	json.NewEncoder(w).Encode(messages)
+
 }
 
 func handleGetMessages(w http.ResponseWriter, r *http.Request) {
