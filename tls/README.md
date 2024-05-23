@@ -1,6 +1,8 @@
 > [!CAUTION]
 > These TLS CA certificates and private keys are given as example ones to showcase SSL/TLS capabilities of the server and client. We are not generating them automatically using Certbot or something else for ease of deployment.
 
+### An example of connecting to a TLS-enabled gRPC server in Go
+
 ```go
 package main
 
@@ -49,4 +51,26 @@ func main() {
     }
     log.Printf("Greeting: %s", r.GetMessage())
 }
+```
+
+### An example of doing the same in Rust
+
+```rust
+use tcp_chat::proto::registry_client::RegistryClient;
+use tonic::transport::{Certificate, ClientTlsConfig, Channel};
+
+const CERT: &str = include_str!("./ca.pem");
+
+let channel = Channel::from_static("https://localhost:9001")
+    .tls_config(
+        ClientTlsConfig::new()
+            .ca_certificate(Certificate::from_pem(CERT))
+            .domain_name("example.com"),
+    )
+    .unwrap()
+    .connect()
+    .await
+    .unwrap();
+
+let mut registry = RegistryClient::new(channel);
 ```
