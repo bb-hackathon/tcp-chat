@@ -33,7 +33,7 @@ window.onload = function() {
 document.addEventListener("DOMContentLoaded", () => {
     async function fetchChatList() {
         try {
-            const response = await fetch('https://localhost:8080/spitroom');
+            const response = await fetch('http://localhost:8080/spitroom');
             if (!response.ok) {
                 throw new Error(`HTTP error! Status: ${response.status}`);
             }

@@ -2,10 +2,8 @@ package main
 
 import (
 	sendmessage "bb-hackathon/tcp-chat.git/src/send_message"
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 )
@@ -35,6 +33,7 @@ type UserCreds struct {
 
 type Usernames struct {
 	Usernames []string `json:"usernames"`
+	Room      string   `json:"room"`
 }
 
 type Room struct {
@@ -102,7 +101,7 @@ func createroomHandler(w http.ResponseWriter, r *http.Request) {
 		usernames2 = append(usernames2, sendmessage.LookUpUser(value))
 	}
 	fmt.Println(usernames2)
-	sendmessage.CreateRoom(usernames2)
+	sendmessage.CreateRoom(usernames2, usernames.Room)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
@@ -119,26 +118,8 @@ func spitRooms(w http.ResponseWriter, r *http.Request) {
 		rooms = append(rooms, Room{ID: id, Name: name})
 	}
 
-	jsonData, err := json.Marshal(rooms)
-	if err != nil {
-		fmt.Printf("Error occurred during marshaling. Err: %v\n", err)
-		return
-	}
+	json.NewEncoder(w).Encode(rooms)
 
-	resp, err := http.Post("/spitroom", "application/json", bytes.NewBuffer(jsonData))
-	if err != nil {
-		fmt.Printf("Error occurred during sending request. Err: %v\n", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Printf("Error occurred during reading response. Err: %v\n", err)
-		return
-	}
-
-	fmt.Printf("Response: %s\n", body)
 }
 
 func main() {
