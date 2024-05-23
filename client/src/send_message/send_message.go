@@ -168,7 +168,7 @@ func SendMessage(t string, room string) {
 	}
 }
 
-func ReceiveMessage(room string) {
+func ReceiveMessage(room string) *proto.ServersideRoomEvent {
 	userUUID, authToken := getUserAuthData()
 
 	address := "luna:9001"
@@ -208,14 +208,18 @@ func ReceiveMessage(room string) {
 	if err != nil {
 		log.Fatalf("SubscribeToRoom failed: %v", err)
 	}
-
-	for {
-		event, err := stream.Recv()
-		if err != nil {
-			log.Fatalf("Error receiving event: %v", err)
-		}
-		log.Printf("Received event: %v", event)
+	event, err := stream.Recv()
+	if err != nil {
+		log.Fatalf("Error receiving event: %v", err)
 	}
+	return event
+	// for {
+	// 	event, err := stream.Recv()
+	// 	if err != nil {
+	// 		log.Fatalf("Error receiving event: %v", err)
+	// 	}
+	// 	log.Printf("Received event: %v", event)
+	// }
 }
 
 func SubscribeToUser() {
