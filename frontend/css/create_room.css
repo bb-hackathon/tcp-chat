@@ -35,6 +35,19 @@ h2 {
     text-align: center;
 }
 
+.room-name-input {
+    display: flex;
+    align-items: center;
+    margin-bottom: 20px;
+}
+
+.room-name-input input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+
 .user-input {
     display: flex;
     align-items: center;

@@ -19,6 +19,7 @@ function addUserInput(button) {
 }
 
 function createChat() {
+    const roomNameInput = document.getElementById('room-name-input');
     const userInputs = document.querySelectorAll('.user-input input');
     const users = [];
     userInputs.forEach(input => {
@@ -31,7 +32,7 @@ function createChat() {
             headers: {
                 "Content-Type": "application/json"
             },
-            body: JSON.stringify({usernames: users})
+            body: JSON.stringify({room: roomNameInput, usernames: users})
         })
         .then(data => {
             alert("Чат создан с пользователями: " + users.join(', '));
