@@ -66,11 +66,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 const response2 = await response.json()
                 const chat = document.getElementById('chat')
                 chat.replaceChildren()
-<<<<<<< HEAD
-=======
                 response2.forEach(element => {
                     const chatli = document.createElement('li')
->>>>>>> 4ffb999 (feat(frontend): Implement message list)
                     chatli.classList.add('you')
                     const message = document.createElement('div')
                     message.classList.add('message')
