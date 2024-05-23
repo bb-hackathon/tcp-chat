@@ -25,7 +25,7 @@ function sendMessage() {
         });
     }
 }
-
+let eventSource;
 window.onload = function() {
     var scrollContainer = document.getElementById('chat');
     scrollContainer.scrollTop = scrollContainer.scrollHeight;
