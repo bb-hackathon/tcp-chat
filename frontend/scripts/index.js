@@ -73,7 +73,7 @@ async function updateGroups(){
                 chat.replaceChildren()
                 response2.forEach(element => {
                     const chatli = document.createElement('li')
-                    chatli.classList.add('you')
+                    chatli.classList.add('me')
                     const message = document.createElement('div')
                     const author = document.createElement('div')
                     author.classList.add('entete')
@@ -103,7 +103,7 @@ async function updateMessages(){
     chat.replaceChildren()
     response2.forEach(element => {
         const chatli = document.createElement('li')
-        chatli.classList.add('you')
+        chatli.classList.add('me')
         const message = document.createElement('div')
         const author = document.createElement('div')
         author.classList.add('entete')
@@ -127,7 +127,7 @@ function subscribeToRoom() {
     eventSource.onmessage = function(event) {
         const message = JSON.parse(event.data);
         const chatli = document.createElement('li')
-        chatli.classList.add('you')
+        chatli.classList.add('me')
         const messagediv = document.createElement('div')
         messagediv.classList.add('message')
         messagediv.innerHTML += element
