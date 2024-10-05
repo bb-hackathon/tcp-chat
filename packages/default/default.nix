@@ -19,6 +19,7 @@ in
 
 naersk'.buildPackage rec {
     src = ../..;
+    pname = "server";
     nativeBuildInputs = with pkgs; [ pkg-config ];
     buildInputs = with pkgs; [
         protobuf # Protocol Buffers, Google's data interchange format.
