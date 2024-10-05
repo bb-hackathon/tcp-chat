@@ -84,3 +84,52 @@ impl From<Message> for ServersideMessage {
         }
     }
 }
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "Test module")]
+mod tests {
+    use super::Message;
+    use crate::auth::Authenticator;
+    use crate::proto::{self, ClientsideMessage, ServersideMessage};
+    use rstest::rstest;
+
+    /// Clients get their own messages echoed back in orded to be displayed,
+    /// So each message essentially goes though being a [`ClientsideMessage`],
+    /// Then just a [`Message`], and then a [`ServersideMessage`]. This test
+    /// ensures no data is lost during these conversions.
+    #[rstest]
+    #[case::normal("message_text")]
+    #[case::empty("")]
+    fn echo(#[case] text: String) {
+        let uuid = dbg!(uuid::Uuid::new_v4());
+        let clientside_message = ClientsideMessage {
+            text: text.clone(),
+            room_uuid: Some(proto::Uuid { uuid: uuid.into() }),
+        };
+
+        let mut request = tonic::Request::new(clientside_message);
+        request.metadata_mut().insert(
+            Authenticator::USER_UUID_KEY,
+            uuid.to_string().parse().unwrap(),
+        );
+
+        let message: Message = request.try_into().unwrap();
+        assert_eq!(message.sender_uuid, uuid);
+        assert_eq!(message.room_uuid, uuid);
+        assert_eq!(message.text, text);
+        let timestamp = dbg!(message.timestamp);
+        let message_uuid = dbg!(message.uuid);
+
+        let serverside_message = ServersideMessage::from(message);
+        assert_eq!(
+            serverside_message,
+            ServersideMessage {
+                uuid: Some(message_uuid.into()),
+                sender_uuid: Some(uuid.into()),
+                room_uuid: Some(uuid.into()),
+                timestamp: Some(timestamp.into()),
+                text,
+            }
+        );
+    }
+}

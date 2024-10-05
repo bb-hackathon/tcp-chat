@@ -24,6 +24,7 @@ prost-types = "0.12.4"
 rand_chacha = "0.3.1"
 rand_core = "0.6.4"
 redis = { version = "0.25.3", features = ["uuid", "tokio-comp", "aio"] }
+rstest = "0.23.0"
 streebog = { version = "0.10.2", optional = true } # GOST 34.11-2012 Hash function (Codename "Streebog")
 thiserror = "1.0.61"
 tokio = { version = "1.37.0", features = ["macros", "rt-multi-thread"] }
