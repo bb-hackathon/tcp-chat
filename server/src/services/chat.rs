@@ -653,6 +653,10 @@ impl proto::chat_server::Chat for Chat {
 impl Chat {
     const INTERNAL_CHANNEL_CAPACITY: usize = 16;
 
+    #[expect(
+        dependency_on_unit_never_type_fallback,
+        reason = "What on earth is this warning"
+    )]
     pub async fn new(persistence_pool: persistence::ConnectionPool) -> RedisResult<Self> {
         let cache_client = Client::open(env::var("KV_URL").expect("Could not read $KV_URL"))?;
         let mut cache = cache_client.get_multiplexed_async_connection().await?;

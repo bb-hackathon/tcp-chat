@@ -72,7 +72,7 @@ mod tests {
     use crate::proto;
 
     #[test]
-    fn conversion_roundtrip() {
+    fn conversion() {
         const INNER: u128 = 123;
         let token = AuthToken { token: INNER };
         let proto_token = proto::AuthToken {

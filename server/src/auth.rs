@@ -147,7 +147,7 @@ mod tests {
     use tonic::Request;
 
     #[test]
-    fn auth_pair_roundtrip() {
+    fn conversion() {
         let mut rng = ChaCha20Rng::seed_from_u64(OsRng.next_u64());
         let user = User::new("user_1".into(), "pass_1".into(), &mut rng);
         let auth_pair = AuthPair {
