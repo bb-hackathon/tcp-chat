@@ -2,9 +2,6 @@ stages:
   - test
   - deploy
 
-# before_script:
-#   sudo apt-get install gcc git rustup libpq-dev protobuf-compiler libssl-dev 
-
 cargo_test:
   tags:
     - virt_host
@@ -21,23 +18,3 @@ cargo_deb:
   artifacts:
     paths:
       - ./target/debian/tcp-chat_0.1.0-1_amd64.deb
-
-# build_packet:
-#   tags:
-#     - virt_host
-#   stage: build
-#   script: 
-#     - чето там build
-#   artifacts:
-#     paths:
-#       - путь до пакета
-
-# deploy_packet:
-#   tags:
-#     - virt_host
-#   stage: deploy
-#   dependencies: build_packet
-#   script:
-#     - apt-get update
-#     - apg-get install -y путь до пакета
-#     - curl localhost:8080/status #типа чекаем что работает
