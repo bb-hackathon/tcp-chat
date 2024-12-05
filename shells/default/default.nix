@@ -14,10 +14,11 @@ pkgs.mkShell rec {
     nativeBuildInputs = with pkgs; [ pkg-config ];
 
     buildInputs = with pkgs; [
+        dpkg
         protobuf # Protocol Buffers, Google's data interchange format.
         grpcurl  # Command-line tool for interacting with gRPC servers.
         bloomrpc # GUI Client for gRPC Services (like Postman).
-        postgresql.lib
+        postgresql
         openssl.dev
         openssl.out
         stdenv.cc.cc.lib
