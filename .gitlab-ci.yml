@@ -2,8 +2,8 @@ stages:
   - test
   - deploy
 
-before_script:
-  sudo apt-get install gcc git rustup libpq-dev protobuf-compiler libssl-dev 
+# before_script:
+#   sudo apt-get install gcc git rustup libpq-dev protobuf-compiler libssl-dev 
 
 cargo_test:
   tags:
