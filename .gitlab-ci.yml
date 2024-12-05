@@ -1,0 +1,33 @@
+stages:
+  - test
+  - deploy
+
+before_script:
+  apt-get install gcc git rustup libpq-dev protobuf-compiler libssl-dev 
+
+cargo_test:
+  tags:
+    - virt_host
+  stage: test
+  script: cargo test
+
+# build_packet:
+#   tags:
+#     - virt_host
+#   stage: build
+#   script: 
+#     - чето там build
+#   artifacts:
+#     paths:
+#       - путь до пакета
+
+# deploy_packet:
+#   tags:
+#     - virt_host
+#   stage: deploy
+#   dependencies: build_packet
+#   script:
+#     - apt-get update
+#     - apg-get install -y путь до пакета
+#     - curl localhost:8080/status #типа чекаем что работает
+
