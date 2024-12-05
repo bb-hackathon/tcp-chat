@@ -11,6 +11,17 @@ cargo_test:
   stage: test
   script: cargo test
 
+cargo_deb:
+  tags:
+    - virt_host
+  stage: test
+  script:
+    - cargo install --no-confirm cargo-deb
+    - cargo deb --package tcp-chat
+  artifacts:
+    paths:
+      - ./target/debian/tcp-chat_0.1.0-1_amd64.deb
+
 # build_packet:
 #   tags:
 #     - virt_host
@@ -30,4 +41,3 @@ cargo_test:
 #     - apt-get update
 #     - apg-get install -y путь до пакета
 #     - curl localhost:8080/status #типа чекаем что работает
-
