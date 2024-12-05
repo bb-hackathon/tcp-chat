@@ -13,7 +13,7 @@ cargo_deb:
     - virt_host
   stage: test
   script:
-    - cargo install --no-confirm cargo-deb
+    - cargo install cargo-deb
     - cargo deb --package tcp-chat
   artifacts:
     paths:
