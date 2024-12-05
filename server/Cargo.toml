@@ -16,6 +16,7 @@ blake3 = "1.5.1"
 color-eyre = "0.6.3"
 diesel = { version = "2.1.6", features = ["postgres", "uuid", "r2d2"] }
 futures = "0.3.30"
+hashbrown = "0.15.2"
 hex = { version = "0.4.3", optional = true }
 itertools = "0.13.0"
 ollama-rs = "0.1.9"
