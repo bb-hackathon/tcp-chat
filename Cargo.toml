@@ -1,9 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
-    "cli",
-    "server"
-]
+members = ["cli", "server"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
